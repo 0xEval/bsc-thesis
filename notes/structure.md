@@ -6,7 +6,7 @@
 ## Outline 
 
 # Background
-## [Code injection](code-injection.md)
+## [Code injection](code_injection.md)
 ## Mitigations (NX, ALSR)
 ## Return Oriented Programming
 
