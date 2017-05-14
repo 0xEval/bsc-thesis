@@ -1,23 +1,54 @@
+#!/usr/bin/python3
+# -----------------------------------------------------------------------------
+# Disasm.py
+# Extracts and prints asm instructions available in a given object file. Uses
+# Capstone dissassembly framework.
+# NB: Compile the object file in x86 not x86_64 (might be supported later).
+#
+# Author: Eval (@cyberjucou)
+# -----------------------------------------------------------------------------
+
 import subprocess
 import argparse
 import re
+import pprint
 from capstone import Cs, CsError, CS_ARCH_X86, CS_MODE_32
 from capstone.x86 import X86_OP_REG, X86_OP_IMM, X86_OP_FP, X86_OP_MEM
 from xprint import to_hex, to_x, to_x_32
 
 
 def extract_opcode(dump):
+    """
+    Extracts and returns the opcode string (in hex) of a given object dump
+
+    Args:
+        dump: Output of objdump in NASM syntax.
+    Returns:
+        Hex string made of the opcodes found in dump.
+    """
     opcode = ""
     for line in dump.splitlines():
         match = re.search(r' ([\da-f]+):\s+((?:[0-9a-f]{2} )+)', line)
+        print(match)
         tmp = match.group(2).strip().split(' ')
+        print(tmp)
         for op in tmp:
-            opcode += op + ' '
+            opcode += op
+        opcode += ' '
     return opcode
 
 
 def print_insn_detail(mode, insn):
+    """
+    Formatted print of all the details contaited in a given instruction.
+    The format can vary depending on the compilation mode (32, 64bits...)
+
+    Args:
+        mode: Target architecture mode.
+        insn: Capstone object representing one instruction line.
+    """
     def print_string_hex(comment, str):
+        """ Formatted print of instruction detail w/ code in Hex format """
         print(comment, end=' ')
         for c in str:
             print("0x%02x " % c, end='')
@@ -101,8 +132,40 @@ def print_insn_detail(mode, insn):
             print("\t\toperands[%u].size: %u" % (c, i.size))
 
 
-def test_class():
+def insn_type(op1, op2):
+    insn_type = "not supported"
+    if (op1.type == X86_OP_REG and op2.type == X86_OP_MEM)\
+            or (op1.type == X86_OP_IMM and op2.type == X86_OP_MEM):
+        insn_type = "load"
+    elif (op1.type == X86_OP_MEM and op2.type == X86_OP_REG) \
+            or (op1.type == X86_OP_MEM and op2.type == X86_OP_IMM):
+        insn_type = "store"
+    return insn_type
 
+
+def insn_detail(insn):
+    op1 = insn.operands[0]  # Destination reg
+    op2 = insn.operands[1]  # Source reg
+    instruction = (insn_type(op1, op2),)
+    for i in (op1, op2):
+        if i.type == X86_OP_REG:
+            instruction += (insn.reg_name(i.reg),)
+        if i.type == X86_OP_IMM:
+            instruction += (i.imm,)
+        if i.type == X86_OP_MEM:
+            if i.mem.segment != 0:
+                instruction += (insn.reg_name(i.mem.segment),)
+            if i.mem.base != 0:
+                instruction += (insn.reg_name(i.mem.base),)
+            if i.mem.index != 0:
+                instruction += (insn.reg_name(i.mem.index),)
+            if i.mem.disp != 0:
+                instruction += (i.mem.disp,)
+    return instruction
+
+
+def test_class():
+    insn_list = []
     for (arch, mode, code, comment, syntax) in all_tests:
         print("*" * 16)
         print("Platform: %s" % comment)
@@ -117,8 +180,12 @@ def test_class():
                 md.syntax = syntax
 
             for insn in md.disasm(code, 0x1000):
+                print(insn)
+                if (insn.mnemonic == "mov"):
+                    insn_list.append(insn_detail(insn))
                 print_insn_detail(mode, insn)
                 print("")
+            pprint.pprint(insn_list)
         except CsError as e:
             print("ERROR: %s" % e)
 
