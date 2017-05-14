@@ -29,9 +29,7 @@ def extract_opcode(dump):
     opcode = ""
     for line in dump.splitlines():
         match = re.search(r' ([\da-f]+):\s+((?:[0-9a-f]{2} )+)', line)
-        print(match)
         tmp = match.group(2).strip().split(' ')
-        print(tmp)
         for op in tmp:
             opcode += op
         opcode += ' '
@@ -164,6 +162,28 @@ def insn_detail(insn):
     return instruction
 
 
+class Disasm:
+    def __init__(self):
+        for (arch, mode, code, comment, syntax) in all_tests:
+            self.md = Cs(arch, mode)
+            self.md.detail = True
+            self.code = code
+            self.mode = mode
+            if not syntax:
+                self.md.syntax = syntax
+
+    def extract_insn(self):
+        insn_list = []
+        for insn in self.md.disasm(self.code, 0x1000):
+            print(insn)
+            if (insn.mnemonic == "mov"):
+                insn_list.append(insn_detail(insn))
+            print_insn_detail(self.mode, insn)
+            print("")
+        pprint.pprint(insn_list)
+        return insn_list
+
+
 def test_class():
     insn_list = []
     for (arch, mode, code, comment, syntax) in all_tests:
@@ -190,26 +210,29 @@ def test_class():
             print("ERROR: %s" % e)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument("target", help="path to target binary")
-    args = parser.parse_args()
-    target = args.target
-
+def dump_object(target):
     header_size = 7
     objdump = subprocess.check_output(
         ["objdump", "-d", "-M", "intel", target]
     )
     objdump = objdump.decode('utf-8')
     objdump = objdump.split('\n', header_size)[-1]
+    return objdump
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument("target", help="path to target binary")
+    args = parser.parse_args()
+    target = args.target
+
+    objdump = dump_object(target)
     print("*" * 16)
     print("Dumping: " + target + "\n%s" % objdump)
     opcode = extract_opcode(objdump)
     print("\nOpcode: %s" % opcode)
 
     X86_CODE32 = bytes.fromhex(opcode)
-
     all_tests = (
             (CS_ARCH_X86, CS_MODE_32, X86_CODE32, "X86 32 (Intel syntax)", 0),
     )
