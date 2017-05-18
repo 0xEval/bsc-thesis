@@ -8,13 +8,21 @@
 # Author: Eval (@cyberjucou)
 # -----------------------------------------------------------------------------
 
+from Structures import Instruction
+
 import subprocess
 import argparse
 import re
-import pprint
 from capstone import Cs, CsError, CS_ARCH_X86, CS_MODE_32
 from capstone.x86 import X86_OP_REG, X86_OP_IMM, X86_OP_FP, X86_OP_MEM
 from xprint import to_hex, to_x, to_x_32
+
+OPCODES = {
+    0x89: 'MOV r/m32,r32',           # Move r16(or 32) to r/m16(or 32).
+    0x8B: 'MOV r32,r/m32',           # Move r/m16 to r16.
+    0xB8: 'MOV r32,imm32',           # Move imm16(or 32) to r16(or 32).
+    0xC7: 'MOV r/m32,imm32',         # Move imm16(or 32) to r/m16(or 32).
+}
 
 
 def extract_opcode(dump):
@@ -65,6 +73,9 @@ def print_insn_detail(mode, insn):
     # print instruction's opcode
     print_string_hex("\tOpcode:", insn.opcode)
 
+    # print instruction format
+    print("\tFormat: %s" % insn_format(insn))
+
     # print operand's REX prefix
     # (non-zero value is relavant for x86_64 instructions)
     print("\trex: 0x%x" % (insn.rex))
@@ -77,18 +88,6 @@ def print_insn_detail(mode, insn):
 
     # print displacement value
     print("\tdisp: 0x%s" % to_x_32(insn.disp))
-
-    # SIB is not available in 16-bit mode
-    # if (mode & CS_MODE_16 == 0):
-    #    # print SIB byte
-    #    print("\tsib: 0x%x" % (insn.sib))
-    #    if (insn.sib):
-    #        if insn.sib_base != 0:
-    #            print("\t\tsib_base: %s" % (insn.reg_name(insn.sib_base)))
-    #        if insn.sib_index != 0:
-    #            print("\t\tsib_index: %s" % (insn.reg_name(insn.sib_index)))
-    #        if insn.sib_scale != 0:
-    #            print("\t\tsib_scale: %d" % (insn.sib_scale))
 
     count = insn.op_count(X86_OP_IMM)
     if count > 0:
@@ -141,29 +140,62 @@ def insn_type(op1, op2):
     return insn_type
 
 
+def insn_format(insn):
+    for op in OPCODES:
+        if op == insn.opcode[0]:
+            return OPCODES[op]
+    return 'not supported'
+
+
 def insn_detail(insn):
+    def operand_name(op):
+        if op.type == X86_OP_REG:
+            name = insn.reg_name(op.reg)
+        if op.type == X86_OP_IMM:
+            name = op.imm
+        if op.type == X86_OP_MEM:
+            name = insn.reg_name(op.mem.base)
+        return name
+
+    def get_offset(op):
+        if op.type == X86_OP_MEM:
+            return op.mem.disp
+
     op1 = insn.operands[0]  # Destination reg
     op2 = insn.operands[1]  # Source reg
-    instruction = (insn_type(op1, op2),)
-    for i in (op1, op2):
-        if i.type == X86_OP_REG:
-            instruction += (insn.reg_name(i.reg),)
-        if i.type == X86_OP_IMM:
-            instruction += (i.imm,)
-        if i.type == X86_OP_MEM:
-            if i.mem.segment != 0:
-                instruction += (insn.reg_name(i.mem.segment),)
-            if i.mem.base != 0:
-                instruction += (insn.reg_name(i.mem.base),)
-            if i.mem.index != 0:
-                instruction += (insn.reg_name(i.mem.index),)
-            if i.mem.disp != 0:
-                instruction += (i.mem.disp,)
-    return instruction
+    address = insn.address
+    mnemonic = insn_format(insn)
+    dst = operand_name(op1)
+    src = operand_name(op2)
+    dst_offset = get_offset(op1)
+    src_offset = get_offset(op2)
+    return Instruction(address, mnemonic, dst, src, dst_offset, src_offset)
+
+
+# class Instruction:
+#     def __init__(self, addr, mnemonic, dst, src, dst_off=None, src_off=None):
+#         seltrf.addr = addr
+#         seltrf.mnemonic = mnemonic
+#         seltrf.dst = dst
+#         seltrf.dst_offset = dst_off
+#         seltrf.src = src
+#         seltrf.src_offset = src_off
+#
+#     def __strtr__(self):
+#         strtring = "Instruction found at <%s>\n" % hex(self.addr)
+#         strtring += "-"*len(string)+"\n"
+#         strtring += "Mnemonic: %s\n" % self.mnemonic
+#         strtring += "    Dest: %s\n" % self.dst
+#         if trself.dst_offset is not None:
+#            tr string += "\twith offset: %s\n" % self.dst_offset
+#         strtring += "     Src: %s\n" % self.src
+#         if trself.src_offset is not None:
+#            tr string += "\twith offset: %s\n" % self.src_offset
+#         rettrurn string
 
 
 class Disasm:
-    def __init__(self):
+    def __init__(self, all_tests):
         for (arch, mode, code, comment, syntax) in all_tests:
             self.md = Cs(arch, mode)
             self.md.detail = True
@@ -175,12 +207,8 @@ class Disasm:
     def extract_insn(self):
         insn_list = []
         for insn in self.md.disasm(self.code, 0x1000):
-            print(insn)
             if (insn.mnemonic == "mov"):
                 insn_list.append(insn_detail(insn))
-            print_insn_detail(self.mode, insn)
-            print("")
-        pprint.pprint(insn_list)
         return insn_list
 
 
@@ -205,7 +233,8 @@ def test_class():
                     insn_list.append(insn_detail(insn))
                 print_insn_detail(mode, insn)
                 print("")
-            pprint.pprint(insn_list)
+            for insn in insn_list:
+                print(insn)
         except CsError as e:
             print("ERROR: %s" % e)
 

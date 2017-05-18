@@ -9,6 +9,7 @@
 
 import argparse
 from ropper import RopperService
+from Structures import Gadget
 
 
 class Extractor:
@@ -61,33 +62,6 @@ class Extractor:
 #                     ppr_gadgets[instr] = address
 
 
-class Gadget:
-    """
-    A gadget is represented by the address of its first gadget and a list of
-    instructions.
-    """
-    def __init__(self, address, instructions):
-        self.address = address
-        self.instructions = instructions
-
-    def __str__(self):
-        string = "Gadget <"+self.address+">\n"
-        string += "-"*len(string)+"\n"
-        i = 0
-        for instr in self.instructions:
-            i += 1
-            string += "g"+str(i)+": "+instr+"\n"
-        return string
-
-    @property
-    def instructions(self):
-        return self.__instructions
-
-    @instructions.setter
-    def instructions(self, instructions):
-        self.__instructions = instructions
-
-
 def print_gadgets(gtype, glist):
     """
     Pretty print each gadget found in a given list.
@@ -104,6 +78,14 @@ def print_gadgets(gtype, glist):
         print("%s" % g)
 
 
+def test_class():
+    mov_rm_gadgets = extract.search_gadgets('mov [e??], e??')
+    print_gadgets("load", mov_rm_gadgets)
+    mov_mr_gadgets = extract.search_gadgets('mov e??, [e??]')
+    print_gadgets("store", mov_mr_gadgets)
+    print_gadgets("pop", extract.search_gadgets('pop ???; ret;'))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument("target", help="path to target binary")
@@ -113,26 +95,12 @@ if __name__ == '__main__':
     target = args.target
     color = args.color
 
-    extract = Extractor(target)
-#    rs = RopperService(options)
-#    rs.addFile(args.target)
-#    rs.loadGadgetsFor(name=target)
-
-    mov_rm_gadgets = extract.search_gadgets('mov [e??], e??', target)
-    print_gadgets("load", mov_rm_gadgets)
-    mov_mr_gadgets = extract.search_gadgets('mov e??, [e??]', target)
-    print_gadgets("store", mov_mr_gadgets)
-
-    print_gadgets("pop", extract.search_gadgets('pop ???; ret;', target))
-    # for g in mov_mr_gadgets:
-    #     for i in g.instructions:
-    #         print(Extractor.rs.asm(i))
-
-    # print("*" * 80)
-    # pprint.pprint(mov_rm_gadgets)
-    # pprint.pprint(mov_mr_gadgets)
-    # print("*" * 80)
-    # opcodes = "55 89e5 83ec10 c745fc01000000 c745f802000000 \
-    # 8b55fc 8b45f8 01d0 c9 c3".split()
-    # for op in opcodes:
-    #     opcode_search(op)
+    options = {
+        'color': False,
+        'all': False,
+        'inst_count': 3,
+        'type': 'rop',
+        'detailed': False,
+    }
+    extract = Extractor(options, target)
+    test_class()
