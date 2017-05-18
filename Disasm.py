@@ -9,6 +9,7 @@
 # -----------------------------------------------------------------------------
 
 from Structures import Instruction
+from Mnemonics import OPCODES
 
 import subprocess
 import argparse
@@ -17,12 +18,30 @@ from capstone import Cs, CsError, CS_ARCH_X86, CS_MODE_32
 from capstone.x86 import X86_OP_REG, X86_OP_IMM, X86_OP_FP, X86_OP_MEM
 from xprint import to_hex, to_x, to_x_32
 
-OPCODES = {
-    0x89: 'MOV r/m32,r32',           # Move r16(or 32) to r/m16(or 32).
-    0x8B: 'MOV r32,r/m32',           # Move r/m16 to r16.
-    0xB8: 'MOV r32,imm32',           # Move imm16(or 32) to r16(or 32).
-    0xC7: 'MOV r/m32,imm32',         # Move imm16(or 32) to r/m16(or 32).
-}
+
+class Disasm:
+    """
+    The disassembler module will extract the available instructions from a
+    given object file. When initiated, the disasm is paired with a single
+    target, providing Capstone's functionalities for it.  It will only search
+    for `mov` instructions as this is the focus of our tool.
+    """
+    def __init__(self, all_tests):
+        for (arch, mode, code, comment, syntax) in all_tests:
+            self.md = Cs(arch, mode)
+            self.md.detail = True
+            self.code = code
+            self.mode = mode
+            if not syntax:
+                self.md.syntax = syntax
+
+    def extract_insn(self):
+        """ Returns a list of all `mov` instructions found in a object dump """
+        insn_list = []
+        for insn in self.md.disasm(self.code, 0x1000):
+            if (insn.mnemonic == "mov"):
+                insn_list.append(insn_detail(insn))
+        return insn_list
 
 
 def extract_opcode(dump):
@@ -129,18 +148,17 @@ def print_insn_detail(mode, insn):
             print("\t\toperands[%u].size: %u" % (c, i.size))
 
 
-def insn_type(op1, op2):
-    insn_type = "not supported"
-    if (op1.type == X86_OP_REG and op2.type == X86_OP_MEM)\
-            or (op1.type == X86_OP_IMM and op2.type == X86_OP_MEM):
-        insn_type = "load"
-    elif (op1.type == X86_OP_MEM and op2.type == X86_OP_REG) \
-            or (op1.type == X86_OP_MEM and op2.type == X86_OP_IMM):
-        insn_type = "store"
-    return insn_type
-
-
 def insn_format(insn):
+    """
+    Searches for the mnemonic string corresponding to the opcode of a given
+    instruction.
+
+    Args:
+        insn: Capstone object representing an instruction.
+    Returns:
+        String containing the instruction mnemonic (format) if the opcode is
+        found. Otherwise, returns not supported.
+    """
     for op in OPCODES:
         if op == insn.opcode[0]:
             return OPCODES[op]
@@ -148,7 +166,17 @@ def insn_format(insn):
 
 
 def insn_detail(insn):
+    """
+    Searches for all the parameters in a Capstone object to create an
+    Instruction.
+
+    Args:
+        insn: Capstone object representing an instruction.
+    Returns:
+        Instruction object
+    """
     def operand_name(op):
+        """ Returns the name(string) of a given operand """
         if op.type == X86_OP_REG:
             name = insn.reg_name(op.reg)
         if op.type == X86_OP_IMM:
@@ -158,61 +186,25 @@ def insn_detail(insn):
         return name
 
     def get_offset(op):
+        """ Returns the memory offset(string) of a given operand """
         if op.type == X86_OP_MEM:
             return op.mem.disp
 
     op1 = insn.operands[0]  # Destination reg
     op2 = insn.operands[1]  # Source reg
+    label = "%s %s" % (insn.mnemonic, insn.op_str)
     address = insn.address
     mnemonic = insn_format(insn)
     dst = operand_name(op1)
     src = operand_name(op2)
     dst_offset = get_offset(op1)
     src_offset = get_offset(op2)
-    return Instruction(address, mnemonic, dst, src, dst_offset, src_offset)
-
-
-# class Instruction:
-#     def __init__(self, addr, mnemonic, dst, src, dst_off=None, src_off=None):
-#         seltrf.addr = addr
-#         seltrf.mnemonic = mnemonic
-#         seltrf.dst = dst
-#         seltrf.dst_offset = dst_off
-#         seltrf.src = src
-#         seltrf.src_offset = src_off
-#
-#     def __strtr__(self):
-#         strtring = "Instruction found at <%s>\n" % hex(self.addr)
-#         strtring += "-"*len(string)+"\n"
-#         strtring += "Mnemonic: %s\n" % self.mnemonic
-#         strtring += "    Dest: %s\n" % self.dst
-#         if trself.dst_offset is not None:
-#            tr string += "\twith offset: %s\n" % self.dst_offset
-#         strtring += "     Src: %s\n" % self.src
-#         if trself.src_offset is not None:
-#            tr string += "\twith offset: %s\n" % self.src_offset
-#         rettrurn string
-
-
-class Disasm:
-    def __init__(self, all_tests):
-        for (arch, mode, code, comment, syntax) in all_tests:
-            self.md = Cs(arch, mode)
-            self.md.detail = True
-            self.code = code
-            self.mode = mode
-            if not syntax:
-                self.md.syntax = syntax
-
-    def extract_insn(self):
-        insn_list = []
-        for insn in self.md.disasm(self.code, 0x1000):
-            if (insn.mnemonic == "mov"):
-                insn_list.append(insn_detail(insn))
-        return insn_list
+    return Instruction(label, address, mnemonic,
+                       dst, src, dst_offset, src_offset)
 
 
 def test_class():
+    """ Test-run function for debugging """
     insn_list = []
     for (arch, mode, code, comment, syntax) in all_tests:
         print("*" * 16)
@@ -240,6 +232,7 @@ def test_class():
 
 
 def dump_object(target):
+    """ Disassemble an object file in Intel syntax and returns as a String """
     header_size = 7
     objdump = subprocess.check_output(
         ["objdump", "-d", "-M", "intel", target]

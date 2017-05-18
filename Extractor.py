@@ -8,8 +8,10 @@
 # -----------------------------------------------------------------------------
 
 import argparse
+import re
 from ropper import RopperService
-from Structures import Gadget
+from Structures import Instruction, Gadget
+from Mnemonics import OPCODES
 
 
 class Extractor:
@@ -32,34 +34,36 @@ class Extractor:
         Returns:
             List of Gadget objects matching the gadgets found in the binary.
         """
+        def find_mnemonic(insn):
+            """ Returns a String of the mnemonic version of a given opcode """
+            opcode = self.rs.asm(insn)
+            opcode = re.findall('.{1,2}', opcode)
+            opcode = int(opcode[0], 16)
+            for i in OPCODES:
+                if i == opcode:
+                    return OPCODES[i]
+            return 'not supported'
+
         gadget_list = []
         for file, gadget in self.rs.search(search=label, name=self.target):
-            address = str(gadget).partition(':')[0]
-            instr = str(gadget).partition(':')[2].strip(' ').split('; ')
-            gadget_list.append(Gadget(address, instr))
+            addr_str = str(gadget).partition(':')[0]
+            insn_str = str(gadget).partition(':')[2].strip(' ').split('; ')
+            insn_list = []
+            for i in insn_str:
+                address = int(addr_str, 16)
+                regs = re.findall(r'e[a-z][a-z]', i)
+                mnemonic = find_mnemonic(i)
+                if len(regs) == 2:
+                    insn = Instruction(i, address, mnemonic,
+                                       regs[0], regs[1])
+                elif len(regs) == 1:
+                    insn = Instruction(i, address, mnemonic,
+                                       regs[0])
+                else:
+                    insn = Instruction(i, address, mnemonic)
+                insn_list.append(insn)
+            gadget_list.append(Gadget(address, insn_list))
         return gadget_list
-
-#     def opcode_search(self, opcode):
-#         gadgets_dict = self.rs.searchOpcode(opcode=opcode)
-#         print("Opcode: "+opcode)
-#         print("Disassembled: \n\t%s" %
-#               (self.rs.disasm(opcode, arch='x86').strip('\n')))
-#         if not gadgets_dict:
-#             print("No gadgets found")
-#         else:
-#             for file, gadgets in gadgets_dict.items():
-#                 for g in gadgets:
-#                     print(g)
-
-#     def ppr_search(self):
-#         pprs = self.rs.searchPopPopRet(name=self.target)
-#         ppr_gadgets = {}
-#         for file, ppr in pprs.items():
-#             for p in ppr:
-#                 address = str(p).partition(':')[0]
-#                 instr = str(p).partition(':')[2].strip(' ')
-#                 if instr not in ppr_gadgets:
-#                     ppr_gadgets[instr] = address
 
 
 def print_gadgets(gtype, glist):
@@ -71,7 +75,6 @@ def print_gadgets(gtype, glist):
         (example: load, store...)
         glist: List of instructions.
     """
-    print("*" * 40)
     print("Searching for type: "+gtype)
     print("Found %i gadgets:\n" % len(glist))
     for g in glist:
@@ -79,21 +82,17 @@ def print_gadgets(gtype, glist):
 
 
 def test_class():
-    mov_rm_gadgets = extract.search_gadgets('mov [e??], e??')
-    print_gadgets("load", mov_rm_gadgets)
-    mov_mr_gadgets = extract.search_gadgets('mov e??, [e??]')
-    print_gadgets("store", mov_mr_gadgets)
+    """ Test-run function for debugging """
+    print_gadgets("load", extract.search_gadgets('mov [e??], e??'))
+    print_gadgets("store", extract.search_gadgets('mov e??, [e??]'))
     print_gadgets("pop", extract.search_gadgets('pop ???; ret;'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument("target", help="path to target binary")
-    parser.add_argument("-c", "--color", help="print a colored output WARNING:\
-                    will break the dictionnaries", action='store_true')
     args = parser.parse_args()
     target = args.target
-    color = args.color
 
     options = {
         'color': False,
@@ -102,5 +101,6 @@ if __name__ == '__main__':
         'type': 'rop',
         'detailed': False,
     }
+
     extract = Extractor(options, target)
     test_class()
