@@ -16,12 +16,14 @@ class Gadget:
         self.instructions = instructions
 
     def __str__(self):
-        string = "Gadget <%s>:\n" % hex(self.address)
-        string += "%s\n" % ("-"*len(string))
+        string = "Gadget <%s>:" % hex(self.address)
+        offset = len(string)
+        # string += "%s\n" % ("-"*len(string))
         i = 0
         for insn in self.instructions:
             i += 1
-            string += "g%s: %s\n" % (i, insn.simple_print())
+            string += "\tg%s: %s\n" % (i, insn.simple_print())
+            string += " "*offset
         return string
 
 
