@@ -19,5 +19,6 @@ OPCODES = {
     0x5D: 'POP r32',
     0x5E: 'POP r32',
     0x5F: 'POP r32',
+    0xE8: 'CALL',
     0xC3: 'RET',
 }
