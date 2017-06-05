@@ -43,9 +43,12 @@ def is_controllable(reg, glist):
     return False
 
 
-def check_matching_rules(g):
+def check_memread_rules(g):
     if g.instructions[0].src == 'esp':
         print(colored('✘ read from ESP', 'red'))
+        return
+    if g.instructions[len(g.instructions)-1].label != 'ret;':
+        print(colored('✘ ret to address', 'red'))
         return
     for i in g.instructions[1:]:
         if i.mnemonic == 'CALL':
@@ -57,35 +60,56 @@ def check_matching_rules(g):
         if i.dst == 'esp':
             print(colored('✘ write on ESP', 'red'))
             return
-    
     print(colored('✓ potential gadget', 'green'))
-    
+
+
+def check_memwrite_rules(g):
+    if g.instructions[0].src == 'esp':
+        print(colored('✘ read from ESP', 'red'))
+        return
+    if g.instructions[len(g.instructions)-1].label != 'ret;':
+        print(colored('✘ ret to address', 'red'))
+        return
+    for i in g.instructions[1:]:
+        if i.mnemonic == 'CALL':
+            print(colored('✘ call instruction', 'red'))
+            return
+        if i.mnemonic == 'MOV r/m32,r32' and i.dst == g.instructions[0].dst:
+            print(colored('✘ conflicting instructions', 'red'))
+            return
+        if i.dst == 'esp':
+            print(colored('✘ write on ESP', 'red'))
+            return
+    print(colored('✓ potential gadget', 'green'))
+
 
 def find_matching_format(insn, ex, verbose=False):
     glist = []
     pop_gadgets_list = search_pop_gadgets(ex)
-    push_gadgets_list = search_push_gadgets(ex)
+    # push_gadgets_list = search_push_gadgets(ex)
 
-    if insn.mnemonic == 'MOV r/m32,r32' or insn.mnemonic == 'MOV r/m32,imm32':
+    if insn.mnemonic == 'MOV r/m32,r32':
         # need to differentiate between reg to mem and reg to reg
         if insn.label.find('ptr') != -1:
             glist = ex.search_gadgets('mov [e??], e??')
         else:
             glist = ex.search_gadgets('mov e??, e??')
-        
-        glist = sorted(glist, key=lambda gadget:len(gadget.instructions))
-        for g in glist:
-            print(g)
 
-    if insn.mnemonic == 'MOV r32,r/m32':
-        glist = ex.search_gadgets('mov e??, [e??]')
-        glist = sorted(glist, key=lambda gadget:len(gadget.instructions))
+        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
         for g in glist:
             if not is_controllable(insn.src, pop_gadgets_list) or \
                     not is_controllable(insn.dst, pop_gadgets_list):
                 print(colored('✘ register(s) not controlled', 'red'))
-            
-            check_matching_rules(g)
+            check_memwrite_rules(g)
+            print(g)
+
+    if insn.mnemonic == 'MOV r32,r/m32':
+        glist = ex.search_gadgets('mov e??, [e??]')
+        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
+        for g in glist:
+            if not is_controllable(insn.src, pop_gadgets_list) or \
+                    not is_controllable(insn.dst, pop_gadgets_list):
+                print(colored('✘ register(s) not controlled', 'red'))
             print(g)
 
     return glist
