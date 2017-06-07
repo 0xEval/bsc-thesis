@@ -43,50 +43,75 @@ def is_controllable(reg, glist):
     return False
 
 
+def print_available_dest(glist):
+    pairs = []
+    for g in glist:
+        dest = g.instructions[0].dst
+        src = g.instructions[0].src
+        if not (src, dest) in pairs:
+            pairs.append((src, dest))
+    # pairs = sorted(pairs)
+    for p in pairs:
+        print("\t%s \t-> \t%s" % (p[0], p[1]))
+
+
 def check_memread_rules(g):
     if g.instructions[0].src == 'esp':
         print(colored('✘ read from ESP', 'red'))
-        return
-    if g.instructions[len(g.instructions)-1].label != 'ret;':
+        return False
+    if g.instructions[len(g.instructions) - 1].label != 'ret;':
         print(colored('✘ ret to address', 'red'))
-        return
+        return False
     for i in g.instructions[1:]:
         if i.mnemonic == 'CALL':
             print(colored('✘ call instruction', 'red'))
-            return
+            return False
         if i.dst == g.instructions[0].dst:
             print(colored('✘ conflicting instructions', 'red'))
-            return
+            return False
         if i.dst == 'esp':
             print(colored('✘ write on ESP', 'red'))
-            return
+            return False
     print(colored('✓ potential gadget', 'green'))
+    return True
 
 
 def check_memwrite_rules(g):
     if g.instructions[0].src == 'esp':
         print(colored('✘ read from ESP', 'red'))
-        return
-    if g.instructions[len(g.instructions)-1].label != 'ret;':
+        return False
+    if g.instructions[len(g.instructions) - 1].label != 'ret;':
         print(colored('✘ ret to address', 'red'))
-        return
+        return False
     for i in g.instructions[1:]:
         if i.mnemonic == 'CALL':
             print(colored('✘ call instruction', 'red'))
-            return
+            return False
         if i.mnemonic == 'MOV r/m32,r32' and i.dst == g.instructions[0].dst:
             print(colored('✘ conflicting instructions', 'red'))
-            return
+            return False
         if i.dst == 'esp':
             print(colored('✘ write on ESP', 'red'))
-            return
+            return False
     print(colored('✓ potential gadget', 'green'))
+    return True
 
 
-def find_matching_format(insn, ex, verbose=False):
+def find_matching_format(insn, ex, pop_gadgets_list, verbose=False):
     glist = []
-    pop_gadgets_list = search_pop_gadgets(ex)
+    matching_glist = []
+    # pop_gadgets_list = search_pop_gadgets(ex)
     # push_gadgets_list = search_push_gadgets(ex)
+
+    if insn.mnemonic == 'MOV r/m32,imm32':
+        glist = ex.search_gadgets('mov [e??], e??')
+        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
+        for g in glist:
+            if not is_controllable(insn.dst, pop_gadgets_list):
+                print(colored('✘ register(s) not controlled', 'red'))
+            if check_memwrite_rules(g):
+                matching_glist.append(g)
+            print(g)
 
     if insn.mnemonic == 'MOV r/m32,r32':
         # need to differentiate between reg to mem and reg to reg
@@ -100,7 +125,8 @@ def find_matching_format(insn, ex, verbose=False):
             if not is_controllable(insn.src, pop_gadgets_list) or \
                     not is_controllable(insn.dst, pop_gadgets_list):
                 print(colored('✘ register(s) not controlled', 'red'))
-            check_memwrite_rules(g)
+            if check_memwrite_rules(g):
+                matching_glist.append(g)
             print(g)
 
     if insn.mnemonic == 'MOV r32,r/m32':
@@ -110,9 +136,11 @@ def find_matching_format(insn, ex, verbose=False):
             if not is_controllable(insn.src, pop_gadgets_list) or \
                     not is_controllable(insn.dst, pop_gadgets_list):
                 print(colored('✘ register(s) not controlled', 'red'))
+            if check_memread_rules(g):
+                matching_glist.append(g)
             print(g)
 
-    return glist
+    return matching_glist
 
 
 if __name__ == '__main__':
@@ -144,6 +172,7 @@ if __name__ == '__main__':
     pop_gadgets = search_pop_gadgets(ex, args.verbose)
     push_gadgets = search_push_gadgets(ex, args.verbose)
     payload_insns = search_payload_insn(dis, args.verbose)
+    payload_matching_gadgets = []
 
     print("+" + "=" * 78 + "+")
     print("Dumping target payload <%s>:\n" % obj)
@@ -161,4 +190,69 @@ if __name__ == '__main__':
         print("Payload instruction: %s // mnemonic: [%s]"
               % (i.label, i.mnemonic))
         print("=" * 80)
-        find_matching_format(i, ex, args.verbose)
+        glist = find_matching_format(i, ex, pop_gadgets, args.verbose)
+        payload_matching_gadgets.append(glist)
+
+    for insn, glist in zip(payload_insns, payload_matching_gadgets):
+        print("Payload instruction: %s // mnemonic: [%s]"
+              % (insn.label, insn.mnemonic))
+        print("=" * 80)
+        for gadget in glist:
+            print(gadget)
+
+    register_move_glist = find_matching_format(
+        payload_insns[0], ex, pop_gadgets, args.verbose)
+
+    memory_write_glist = find_matching_format(
+        payload_insns[1], ex, pop_gadgets, args.verbose)
+
+    # memory_read_glist = find_matching_format(
+    #     payload_insns[4], ex, pop_gadgets, args.verbose)
+    reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
+    controlled_regs = []
+    for reg in pop_gadgets:
+        if reg not in controlled_regs:
+            controlled_regs.append(reg.instructions[0].dst)
+    print("Controlled registers: \n\t%s" %
+          colored(' '.join(str(cr) for cr in controlled_regs), 'green'))
+    missing_regs = list(set(reglist) - set(controlled_regs))
+    if missing_regs:
+        print("Missing: \n\t%s" %
+              colored(' '.join(str(mr) for mr in missing_regs), 'red'))
+
+    print("Possible reg mov: (green = direct mov, blue = chained)")
+    for reg in reglist:
+        possible_movs = []
+        combo_movs = []
+        for g in register_move_glist:
+            if g.instructions[0].src == reg and \
+               g.instructions[0].dst not in possible_movs:
+                possible_movs.append(g.instructions[0].dst)
+
+        for g in register_move_glist:
+            for m in possible_movs:
+                if g.instructions[0].src == m and \
+                   g.instructions[0].dst not in combo_movs and \
+                   g.instructions[0].dst not in possible_movs:
+                    combo_movs.append(g.instructions[0].dst)
+            # for m in combo_movs:
+            #     if g.instructions[0].src == m and \
+            #        g.instructions[0].dst not in combo_movs and \
+            #        g.instructions[0].dst not in possible_movs:
+            #         combo_movs.append(g.instructions[0].dst)
+
+        missing_regs = list(set(reglist) - set(possible_movs))
+        missing_regs = list(set(missing_regs) - set(combo_movs))
+        if possible_movs:
+            print("\t%s: %s %s %s" % (
+                reg,
+                colored(' '.join(str(pm) for pm in possible_movs), 'green'),
+                colored(' '.join(str(cm) for cm in combo_movs), 'cyan'),
+                colored(' '.join(str(mr) for mr in missing_regs), 'red')
+            ))
+
+    # print_available_dest(register_move_glist)
+    # print("Dest registers for MEM_WRITE: ")
+    # print_available_dest(memory_write_glist)
+    # print("Dest registers for MEM_READ: ")
+    # print_available_dest(memory_read_glist)
