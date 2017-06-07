@@ -77,7 +77,7 @@ def check_memread_rules(g):
 
 
 def check_memwrite_rules(g):
-    if g.instructions[0].src == 'esp':
+    if g.instructions[0].src == 'esp' or g.instructions[0].dst == 'esp':
         print(colored('✘ read from ESP', 'red'))
         return False
     if g.instructions[len(g.instructions) - 1].label != 'ret;':
@@ -187,15 +187,15 @@ if __name__ == '__main__':
         print(g)
 
     for i in payload_insns:
-        print("Payload instruction: %s // mnemonic: [%s]"
-              % (i.label, i.mnemonic))
+        print("Payload instruction: %s // mnemonic: [%s]" % (
+            i.label, i.mnemonic))
         print("=" * 80)
         glist = find_matching_format(i, ex, pop_gadgets, args.verbose)
         payload_matching_gadgets.append(glist)
 
     for insn, glist in zip(payload_insns, payload_matching_gadgets):
-        print("Payload instruction: %s // mnemonic: [%s]"
-              % (insn.label, insn.mnemonic))
+        print("Payload instruction: %s // mnemonic: [%s]" % (
+            insn.label, insn.mnemonic))
         print("=" * 80)
         for gadget in glist:
             print(gadget)
@@ -203,24 +203,91 @@ if __name__ == '__main__':
     register_move_glist = find_matching_format(
         payload_insns[0], ex, pop_gadgets, args.verbose)
 
-    memory_write_glist = find_matching_format(
-        payload_insns[1], ex, pop_gadgets, args.verbose)
+    # memory_write_glist = find_matching_format(
+    #     payload_insns[1], ex, pop_gadgets, args.verbose)
 
     # memory_read_glist = find_matching_format(
     #     payload_insns[4], ex, pop_gadgets, args.verbose)
+
     reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
     controlled_regs = []
+
     for reg in pop_gadgets:
         if reg not in controlled_regs:
             controlled_regs.append(reg.instructions[0].dst)
+
     print("Controlled registers: \n\t%s" %
           colored(' '.join(str(cr) for cr in controlled_regs), 'green'))
+
     missing_regs = list(set(reglist) - set(controlled_regs))
     if missing_regs:
         print("Missing: \n\t%s" %
               colored(' '.join(str(mr) for mr in missing_regs), 'red'))
 
+    # Each register is associated with 3 lists mapping the possible
+    # Register to register move:
+    # - direct: list for direct moves (ex: mov eax, ebx)
+    # - chained: list with chained moves 1...n
+    #   (ex: mov ecx, eax is not available directly, instead we have a chain:
+    #       mov edx, eax --> mov ecx, edx).
+    move_mapping = {
+        'eax': {'direct': [], 'chained': [], 'missing': []},
+        'ebx': {'direct': [], 'chained': [], 'missing': []},
+        'ecx': {'direct': [], 'chained': [], 'missing': []},
+        'edx': {'direct': [], 'chained': [], 'missing': []},
+        'ebp': {'direct': [], 'chained': [], 'missing': []},
+        'esp': {'direct': [], 'chained': [], 'missing': []},
+        'edi': {'direct': [], 'chained': [], 'missing': []},
+        'esi': {'direct': [], 'chained': [], 'missing': []},
+    }
+
     print("Possible reg mov: (green = direct mov, blue = chained)")
+    for reg in move_mapping.keys():
+        # Find the direct mov possibilites in the Reg-to-Reg gadget list.
+        for g in register_move_glist:
+            src = g.instructions[0].src
+            dst = g.instructions[0].dst
+            if src == reg and dst not in move_mapping[reg]["direct"]:
+                move_mapping[reg]["direct"].append(dst)
+
+        # Find the possible chains within the direct mov list (length 2).
+        for g in register_move_glist:
+            src = g.instructions[0].src
+            dst = g.instructions[0].dst
+            for m in move_mapping[reg]["direct"]:
+                if src == m and \
+                   dst not in move_mapping[reg]["direct"] and \
+                   dst not in move_mapping[reg]["chained"]:
+                    move_mapping[reg]["chained"].append(dst)
+
+        # Find the possible chains within the 2-chain mov list (length 3+).
+        for g in register_move_glist:
+            src = g.instructions[0].src
+            dst = g.instructions[0].dst
+            for m in move_mapping[reg]["chained"]:
+                if src == m and \
+                  dst not in move_mapping[reg]["direct"] and \
+                  dst not in move_mapping[reg]["chained"]:
+                    move_mapping[reg]["chained"].append(dst)
+
+        # Appends the missing destinations to the missing list.
+        for k in move_mapping.keys():
+            if k not in move_mapping[reg]["direct"] and \
+               k not in move_mapping[reg]["chained"]:
+                move_mapping[reg]["missing"].append(k)
+
+        if move_mapping[reg]["direct"]:
+            print("\t%s: %s %s %s" % (
+                reg,
+                colored(' '.join(
+                    str(m) for m in move_mapping[reg]["direct"]), 'green'),
+                colored(' '.join(
+                    str(m) for m in move_mapping[reg]["chained"]), 'cyan'),
+                colored(' '.join(
+                    str(m) for m in move_mapping[reg]["missing"]), 'red'),
+            ))
+
+    print()
     for reg in reglist:
         possible_movs = []
         combo_movs = []
@@ -235,11 +302,13 @@ if __name__ == '__main__':
                    g.instructions[0].dst not in combo_movs and \
                    g.instructions[0].dst not in possible_movs:
                     combo_movs.append(g.instructions[0].dst)
-            # for m in combo_movs:
-            #     if g.instructions[0].src == m and \
-            #        g.instructions[0].dst not in combo_movs and \
-            #        g.instructions[0].dst not in possible_movs:
-            #         combo_movs.append(g.instructions[0].dst)
+
+        for g in register_move_glist:
+            for m in combo_movs:
+                if g.instructions[0].src == m and \
+                    g.instructions[0].dst not in combo_movs and \
+                        g.instructions[0].dst not in possible_movs:
+                    combo_movs.append(g.instructions[0].dst)
 
         missing_regs = list(set(reglist) - set(possible_movs))
         missing_regs = list(set(missing_regs) - set(combo_movs))
