@@ -1,3 +1,12 @@
+#!/usr/bin/python3
+# -----------------------------------------------------------------------------
+# Matcher.py
+# Using Extractor and Disasm, the module searches for read, write, and register
+# move gadgets in a given binary.
+#
+# Author: Eval (@cyberjucou)
+# -----------------------------------------------------------------------------
+
 import Extractor
 import Disasm
 import argparse
@@ -14,45 +23,39 @@ options = {
 }
 
 
-def search_pop_gadgets(extractor, verbose=False):
-    regs = extractor.search_gadgets('pop ???; ret;')
-    if verbose:
-        print("Found %s controllable registers:" % len(regs))
-        for g in regs:
-            print(g)
-    return regs
+def search_pop_gadgets(extractor):
+    """ Using the Extractor module, returns a list of pop gadgets """
+    glist = extractor.search_gadgets('pop ???; ret;')
+    return glist
 
 
-def search_push_gadgets(extractor, verbose=False):
+def search_push_gadgets(extractor):
+    """ Using the Extractor module, returns a list of push gadgets """
     glist = extractor.search_gadgets('push e??; pop % ret;')
     return glist
 
 
-def search_payload_insn(disassembler, verbose=False):
+def search_payload_insn(disassembler):
+    """ Using the Disasm module, returns a list of mov gadgets"""
     insn = disassembler.extract_insn()
-    if verbose:
-        for i in insn:
-            print(i)
     return insn
 
 
-def is_controllable(reg, glist):
-    for g in glist:
-        if g.instructions[0].dst == reg:
+def is_controllable(target_reg, controlled_regs):
+    """
+    Check if register is controlled (ie: a pop reg; ret; gadget exists)
+
+    Args:
+            reg: String representing the register.
+            controlled_regs: List of Gadget objects
+
+    Returns:
+            True if the register is found, False otherwise
+    """
+    for reg in controlled_regs:
+        if target_reg == reg:
             return True
     return False
-
-
-def print_available_dest(glist):
-    pairs = []
-    for g in glist:
-        dest = g.instructions[0].dst
-        src = g.instructions[0].src
-        if not (src, dest) in pairs:
-            pairs.append((src, dest))
-    # pairs = sorted(pairs)
-    for p in pairs:
-        print("\t%s \t-> \t%s" % (p[0], p[1]))
 
 
 def check_memread_rules(g):
@@ -97,11 +100,36 @@ def check_memwrite_rules(g):
     return True
 
 
+def check_gadget_validity(g, controlled_regs):
+    """
+    Checks a set of rules on a given gadget, returns True if all are passed
+    False otherwise.
+    """
+    if not is_controllable(g.instructions[0].dst, controlled_regs) or\
+       not is_controllable(g.instructions[0].dst, controlled_regs):
+        return False
+    if g.instructions[0].src == 'esp' or\
+       g.instructions[0].dst == 'esp' or\
+       g.instructions[len(g.instructions)-1].label != 'ret;':
+        return False
+    for i in g.instructions[1:]:
+        if i.mnemonic == 'CALL' or\
+           i.mnemonic == 'MOV r/m32,r32' and i.dst == g.instructions[0].dst or\
+           i.dst == 'esp':
+            return False
+    return True
+
+
+def _print_rule_validation(glist):
+    """ Prints the rule check detail for every gadget in a list """
+    for g in glist:
+        check_memwrite_rules(g)
+        print(g)
+
+
 def find_matching_format(insn, ex, pop_gadgets_list, verbose=False):
     glist = []
     matching_glist = []
-    # pop_gadgets_list = search_pop_gadgets(ex)
-    # push_gadgets_list = search_push_gadgets(ex)
 
     if insn.mnemonic == 'MOV r/m32,imm32':
         glist = ex.search_gadgets('mov [e??], e??')
@@ -147,7 +175,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument("target", help="path to target binary")
     parser.add_argument("object", help="path to payload object file")
-    parser.add_argument("-v", "--verbose", action="store_true",
+    parser.add_argument("-D", "--DEBUG", action="store_true",
                         help="enable detailed output")
 
     args = parser.parse_args()
@@ -165,10 +193,9 @@ if __name__ == '__main__':
     ex = Extractor.Extractor(options, target)
     dis = Disasm.Disasm(all_tests)
 
-    pop_gadgets = search_pop_gadgets(ex, args.verbose)
-    push_gadgets = search_push_gadgets(ex, args.verbose)
-    payload_insns = search_payload_insn(dis, args.verbose)
-    payload_matching_gadgets = []
+    pop_gadgets = search_pop_gadgets(ex)
+    push_gadgets = search_push_gadgets(ex)
+    payload_insns = search_payload_insn(dis)
 
     print("Dumping target payload <%s>:" % obj)
     print("-" * 80)
@@ -188,15 +215,27 @@ if __name__ == '__main__':
                                 key=lambda gadget: len(gadget.instructions)),
     }
 
-    gadgets_lists['register_move'] = [
-        g for g in gadgets_lists['register_move'] if check_memwrite_rules(g)
-    ]
-    gadgets_lists['memory_write'] = [
-        g for g in gadgets_lists['memory_write'] if check_memwrite_rules(g)
-    ]
-    gadgets_lists['memory_read'] = [
-        g for g in gadgets_lists['memory_read'] if check_memread_rules(g)
-    ]
+    # Print the rulecheck details on each gadget
+    if args.DEBUG:
+        for gtype, glist in gadgets_lists.items():
+            print("DEBUG: " + gtype)
+            print("-" * 80)
+            _print_rule_validation(glist)
+
+    reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
+    controlled_regs = []
+
+    for reg in pop_gadgets:
+        if reg not in controlled_regs:
+            controlled_regs.append(reg.instructions[0].dst)
+
+    missing_regs = list(set(reglist) - set(controlled_regs))
+
+    for gtype in gadgets_lists.keys():
+        gadgets_lists[gtype] = [
+            g for g in gadgets_lists[gtype]
+            if check_gadget_validity(g, controlled_regs)
+        ]
 
     print("Register move gadgets: ")
     print("-" * 80)
@@ -212,47 +251,6 @@ if __name__ == '__main__':
     print("-" * 80)
     for g in gadgets_lists['memory_write']:
         print(g)
-    # for gadget in gadgets_lists['memory_write']:
-    #     if not check_memwrite_rules(gadget):
-    #         gadgets_lists['memory_write'].remove(gadget)
-
-    # for gadget in gadgets_lists['memory_read']:
-    #     if check_memread_rules(gadget) is False:
-    #         gadgets_lists['memory_read'].remove(gadget)
-    #     # print(gadget)
-
-    # print()
-
-    # for i in payload_insns:
-    #     print("Payload instruction: %s // mnemonic: [%s]" % (
-    #         i.label, i.mnemonic))
-    #     print("=" * 80)
-    #     glist = find_matching_format(i, ex, pop_gadgets, args.verbose)
-    #     payload_matching_gadgets.append(glist)
-
-    # # Prints all available gadgets (after rule-checking)
-    # for insn, glist in zip(payload_insns, payload_matching_gadgets):
-    #     print("Payload instruction: %s // mnemonic: [%s]" % (
-    #         insn.label, insn.mnemonic))
-    #     print("=" * 80)
-    #     for gadget in glist:
-    #         print(gadget)
-
-    # register_move_glist = []
-    # for glist in payload_matching_gadgets:
-    #     for g in glist:
-    #         if g.instructions[0].mnemonic == 'MOV r/m32,r32' and \
-    #            g.instructions[0].label.find('ptr') != -1:
-    #             register_move_glist = glist
-
-    reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
-    controlled_regs = []
-
-    for reg in pop_gadgets:
-        if reg not in controlled_regs:
-            controlled_regs.append(reg.instructions[0].dst)
-
-    missing_regs = list(set(reglist) - set(controlled_regs))
 
     print("Controlled registers: \n\t%s" %
           colored(' '.join(str(cr) for cr in controlled_regs), 'green'))
@@ -266,16 +264,10 @@ if __name__ == '__main__':
     # - chained: list with chained moves 1...n
     #   (ex: mov ecx, eax is not available directly, instead we have a chain:
     #       mov edx, eax --> mov ecx, edx).
-    move_mapping = {
-        'eax': {'direct': [], 'chained': [], 'missing': []},
-        'ebx': {'direct': [], 'chained': [], 'missing': []},
-        'ecx': {'direct': [], 'chained': [], 'missing': []},
-        'edx': {'direct': [], 'chained': [], 'missing': []},
-        'ebp': {'direct': [], 'chained': [], 'missing': []},
-        'esp': {'direct': [], 'chained': [], 'missing': []},
-        'edi': {'direct': [], 'chained': [], 'missing': []},
-        'esi': {'direct': [], 'chained': [], 'missing': []},
-    }
+
+    move_mapping = {}
+    for reg in reglist:
+        move_mapping[reg] = {'direct': [], 'chained': [], 'missing': []}
 
     print("Possible reg mov:")
     print("\tsrc: dst (green = direct mov, blue = chained)")
