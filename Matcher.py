@@ -4,7 +4,8 @@
 # Using Extractor and Disasm, the module searches for read, write, and register
 # move gadgets in a given binary.
 #
-# Author: Eval (@cyberjucou)
+# Author: Eval
+# GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
 
@@ -260,6 +261,7 @@ def search_regmov_conflict(payload_insn, target_gadget):
 def solve_memwrite_chain(src, dst, insn, mov_gadget_dict, move_mapping):
     return
 
+
 def find_chain(payload_insn, mov_gadget_dict, move_mapping):
     """
     Search in a dictionnary of MOV gadgets for a gadget (or gadget chain) that
@@ -419,7 +421,7 @@ if __name__ == '__main__':
             if check_gadget_validity(g, controlled_regs)
         ]
 
-    # Test cases with manual instructions:
+    # Test cases with manual instructions used to find gadget chains
     debug_instructions = [
         Instruction('mov ecx, ebp', 0x12345678, 'MOV r/m32,r32',
                     'ecx', 'ebp'),

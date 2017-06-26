@@ -3,7 +3,8 @@
 # Mnemonics.py
 # Dictionnaries of x86 opcodes and their corresponding mnemonics. Will be used
 # in other modules.
-# Author: Eval (@cyberjucou)
+# Author: Eval
+# GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
 OPCODES = {
@@ -19,6 +20,7 @@ OPCODES = {
     0x5D: 'POP r32',
     0x5E: 'POP r32',
     0x5F: 'POP r32',
+    0xC9: 'LEAVE',
     0xE8: 'CALL',
     0xC3: 'RET',
 }

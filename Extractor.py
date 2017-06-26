@@ -4,7 +4,8 @@
 # Search for all ROP gadgets in a given binary using Ropper.
 # The gadgets can be searched according to a label or an opcode.
 #
-# Author: Eval (@cyberjucou)
+# Author: Eval
+# GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
 import argparse
@@ -81,7 +82,7 @@ def print_gadgets(gtype, glist):
         print("%s" % g)
 
 
-def test_class():
+def _test_class():
     """ Test-run function for debugging """
     print_gadgets("load", extract.search_gadgets('mov [e??], e??'))
     print_gadgets("store", extract.search_gadgets('mov e??, [e??]'))
@@ -103,4 +104,4 @@ if __name__ == '__main__':
     }
 
     extract = Extractor(options, target)
-    test_class()
+    _test_class()

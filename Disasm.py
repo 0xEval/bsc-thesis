@@ -5,7 +5,8 @@
 # Capstone dissassembly framework.
 # NB: Compile the object file in x86 not x86_64 (might be supported later).
 #
-# Author: Eval (@cyberjucou)
+# Author: Eval
+# GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
 from Structures import Instruction
