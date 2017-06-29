@@ -65,56 +65,6 @@ def is_reg_controllable(target_reg, controlled_regs):
     return False
 
 
-def check_gadget_validity(g, controlled_regs):
-    """
-    Checks a set of rules on a given gadget, returns True if all are passed
-    False otherwise.
-    """
-    gadget_src = g.instructions[0].src
-    gadget_dst = g.instructions[0].dst
-    if gadget_src == 'esp' or\
-            gadget_dst == 'esp' or\
-            g.instructions[len(g.instructions)-1].label != 'ret;':
-        return False
-    for i in g.instructions[1:]:
-        if i.mnemonic == 'CALL' or\
-                i.mnemonic == 'LEAVE' or\
-                i.mnemonic == 'MOV r/m32,r32' and i.dst == gadget_dst or\
-                i.dst == 'esp':
-            return False
-    return True
-
-
-def _print_rule_validation(glist):
-    """ Prints the rule check detail for every gadget in a list """
-    def _check_ruleset(g):
-        if g.instructions[0].src == 'esp' or g.instructions[0].dst == 'esp':
-            print(colored('✘ forbidden access to/from ESP', 'red'))
-            return False
-        if g.instructions[len(g.instructions) - 1].label != 'ret;':
-            print(colored('✘ ret to address', 'red'))
-            return False
-        for i in g.instructions[1:]:
-            if i.mnemonic == 'LEAVE':
-                print(colored('✘ leave instruction', 'red'))
-                return False
-            if i.mnemonic == 'CALL':
-                print(colored('✘ call instruction', 'red'))
-                return False
-            if i.dst == g.instructions[0].dst:
-                print(colored('✘ conflicting instructions', 'red'))
-                return False
-            if i.dst == 'esp':
-                print(colored('✘ write on ESP', 'red'))
-                return False
-        print(colored('✓ potential gadget', 'green'))
-        return True
-
-    for g in glist:
-        _check_ruleset(g)
-        print(g)
-
-
 def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
     """
     Checks if a src register can be moved to a target register with no side
@@ -144,6 +94,58 @@ def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
                                 index += 1
     for m in movchain:
         print(m)
+
+    return False
+
+
+def check_gadget_validity(g, controlled_regs):
+    """
+    Checks a set of rules on a given gadget, returns True if all are passed
+    False otherwise.
+    """
+    gadget_src = g.instructions[0].src
+    gadget_dst = g.instructions[0].dst
+    if gadget_src == 'esp' or\
+            gadget_dst == 'esp' or\
+            g.instructions[len(g.instructions)-1].label != 'ret;':
+        return False
+    for i in g.instructions[1:]:
+        if i.mnemonic == 'CALL' or\
+                i.mnemonic == 'LEAVE' or\
+                i.mnemonic == 'MOV r/m32,r32' and i.dst == gadget_dst or\
+                i.dst == 'esp':
+            return False
+    return True
+
+
+def search_regmov_conflict(payload_insn, target_gadget):
+    """
+    Search for a conflicting register move between a given instruction and a
+    target gadget.
+
+    Args:
+        payload_insn: payload instruction used to check for possible conflicts
+
+        target_gadget: potential Gadget found in the binary
+
+    Returns:
+        True if a conflict has been found, False otherwise.
+    """
+    if payload_insn.label.find('ptr') == -1:
+        unavailable_regs = []
+    else:
+        unavailable_regs = [payload_insn.src, payload_insn.dst]
+
+    if target_gadget.instructions[0].src == payload_insn.dst:
+        unavailable_regs.append(target_gadget.instructions[0].dst)
+        unavailable_regs.remove(payload_insn.dst)
+
+    for i in target_gadget.instructions[1:]:
+        if i.dst in unavailable_regs:
+            print("Conflicting instructions during mov sequence")
+            print(colored("Conflict on: " + i.dst, 'red'))
+            print(target_gadget)
+            return True
 
     return False
 
@@ -198,74 +200,6 @@ def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
                                           regmove_glist, move_mapping,
                                           gadget_chain, visited)
     return False
-
-
-def search_regmov_conflict(payload_insn, target_gadget):
-    """
-    Search for a conflicting register move between a given instruction and a
-    target gadget.
-
-    Args:
-        payload_insn: payload instruction used to check for possible conflicts
-        
-        target_gadget: potential Gadget found in the binary
-
-    Returns:
-        True if a conflict has been found, False otherwise.
-    """
-    if payload_insn.label.find('ptr') == -1:
-        unavailable_regs = []
-    else:
-        unavailable_regs = [payload_insn.src, payload_insn.dst]
-
-    if target_gadget.instructions[0].src == payload_insn.dst:
-        unavailable_regs.append(target_gadget.instructions[0].dst)
-        unavailable_regs.remove(payload_insn.dst)
-
-    for i in target_gadget.instructions[1:]:
-        if i.dst in unavailable_regs:
-            print("Conflicting instructions during mov sequence")
-            print(colored("Conflict on: " + i.dst, 'red'))
-            print(target_gadget)
-            return True
-
-    return False
-
-
-def print_chain(gadget_chain):
-    """ Prints all the gadgets from a given chain """
-    for g in gadget_chain:
-        print(g)
-
-
-def print_stack(gadget_chain):
-    """ Prepare and prints a visualization of the stack holding the payload"""
-    CELL_WIDTH = 58
-
-    def _stack_cell(size, value, desc):
-        """ Prints a stack cell with a given value and description """
-        print("|" + " "*size + "<"+str(value)+">" + " "*size + "| " +
-              colored(desc, 'yellow'))
-
-    def _stack_separator(size=CELL_WIDTH):
-        """ Prints a separator between two stack cells """
-        print("+" + "-"*int(size/2) + "+")
-
-    def _prepare_stack(gadget):
-        """ Inserts a placeholder value to be popped by subsequent gadgets """
-        for index, insn in enumerate(g.instructions, start=0):
-            if insn.mnemonic == 'POP r32':
-                label = colored("value to be popped", "cyan")
-                _stack_cell(len(str(g.address)), "0x0000000", label)
-                _stack_separator()
-
-    print(" "*13 + "STACK")
-    _stack_separator()
-    for index, g in enumerate(gadget_chain, start=1):
-        _prepare_stack(g)
-        label = "address of G"+str(index)
-        _stack_cell(len(str(g.address)), hex(g.address), label)
-        _stack_separator()
 
 
 def solve_chain(chain_type, payload_insn, mov_gadget_dict, move_mapping):
@@ -403,6 +337,73 @@ def find_chain(payload_insn, mov_gadget_dict, move_mapping):
     return gadget_chain
 
 
+def print_rule_validation(glist):
+    """ Prints the rule check detail for every gadget in a list """
+    def _check_ruleset(g):
+        if g.instructions[0].src == 'esp' or g.instructions[0].dst == 'esp':
+            print(colored('✘ forbidden access to/from ESP', 'red'))
+            return False
+        if g.instructions[len(g.instructions) - 1].label != 'ret;':
+            print(colored('✘ ret to address', 'red'))
+            return False
+        for i in g.instructions[1:]:
+            if i.mnemonic == 'LEAVE':
+                print(colored('✘ leave instruction', 'red'))
+                return False
+            if i.mnemonic == 'CALL':
+                print(colored('✘ call instruction', 'red'))
+                return False
+            if i.dst == g.instructions[0].dst:
+                print(colored('✘ conflicting instructions', 'red'))
+                return False
+            if i.dst == 'esp':
+                print(colored('✘ write on ESP', 'red'))
+                return False
+        print(colored('✓ potential gadget', 'green'))
+        return True
+
+    for g in glist:
+        _check_ruleset(g)
+        print(g)
+
+
+def print_chain(gadget_chain):
+    """ Prints all the gadgets from a given chain """
+    for g in gadget_chain:
+        print(g)
+
+
+def print_stack(gadget_chain):
+    """ Prepare and prints a visualization of the stack holding the payload"""
+    CELL_WIDTH = 58
+
+    def _stack_cell(size, value, desc):
+        """ Prints a stack cell with a given value and description """
+        print("|" + " "*size + "<"+str(value)+">" + " "*size + "| " +
+              colored(desc, 'yellow'))
+
+    def _stack_separator(size=CELL_WIDTH):
+        """ Prints a separator between two stack cells """
+        print("+" + "-"*int(size/2) + "+")
+
+    def _prepare_stack(gadget):
+        """ Inserts a placeholder value to be popped by subsequent gadgets """
+        for index, insn in enumerate(g.instructions, start=0):
+            if insn.mnemonic == 'POP r32':
+                label = colored("value to be popped", "cyan")
+                _stack_cell(len(str(g.address)), "0x0000000", label)
+                _stack_separator()
+
+    print(" "*13 + "STACK")
+    _stack_separator()
+    for index, g in enumerate(gadget_chain, start=1):
+        _prepare_stack(g)
+        label = "address of G"+str(index)
+        _stack_cell(len(str(g.address)), hex(g.address), label)
+        _stack_separator()
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument("target", help="path to target binary")
@@ -452,7 +453,7 @@ if __name__ == '__main__':
         for gtype, glist in gadgets_lists.items():
             print("DEBUG: " + gtype)
             print("-" * 80)
-            _print_rule_validation(glist)
+            print_rule_validation(glist)
 
     reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
     controlled_regs = []
