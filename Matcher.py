@@ -2,7 +2,9 @@
 # -----------------------------------------------------------------------------
 # Matcher.py
 # Using Extractor and Disasm, the module searches for read, write, and register
-# move gadgets in a given binary.
+# move gadgets in a given binary. The gadgets are filtered with a ruleset and
+# then chained to match with a each instruction contained in the exploit we
+# want to translate.
 #
 # Author: Eval
 # GitHub: https://github.com/jcouvy
@@ -15,7 +17,7 @@ import argparse
 
 from termcolor import colored
 from capstone import CS_ARCH_X86, CS_MODE_32
-from Structures import Gadget, Instruction
+from Structures import Instruction
 
 
 options = {
@@ -45,69 +47,22 @@ def search_payload_insn(disassembler):
     return insn
 
 
-def is_controllable(target_reg, controlled_regs):
+def is_reg_controllable(target_reg, controlled_regs):
     """
     Check if register is controlled (ie: a pop reg; ret; gadget exists)
 
     Args:
-    reg: String representing the register.
-    controlled_regs: List of Gadget objects
+        reg: String representing the register.
+
+        controlled_regs: List of Gadget objects
 
     Returns:
-    True if the register is found, False otherwise
+        True if the register is found, False otherwise
     """
     for reg in controlled_regs:
         if target_reg == reg:
             return True
     return False
-
-
-def check_memread_rules(g):
-    if g.instructions[0].src == 'esp':
-        print(colored('✘ read from ESP', 'red'))
-        return False
-    if g.instructions[len(g.instructions) - 1].label != 'ret;':
-        print(colored('✘ ret to address', 'red'))
-        return False
-    for i in g.instructions[1:]:
-        if i.mnemonic == 'LEAVE':
-            print(colored('✘ leave instruction', 'red'))
-            return False
-        if i.mnemonic == 'CALL':
-            print(colored('✘ call instruction', 'red'))
-            return False
-        if i.dst == g.instructions[0].dst:
-            print(colored('✘ conflicting instructions', 'red'))
-            return False
-        if i.dst == 'esp':
-            print(colored('✘ write on ESP', 'red'))
-            return False
-    print(colored('✓ potential gadget', 'green'))
-    return True
-
-
-def check_memwrite_rules(g):
-    if g.instructions[0].src == 'esp' or g.instructions[0].dst == 'esp':
-        print(colored('✘ read from ESP', 'red'))
-        return False
-    if g.instructions[len(g.instructions) - 1].label != 'ret;':
-        print(colored('✘ ret to address', 'red'))
-        return False
-    for i in g.instructions[1:]:
-        if i.mnemonic == 'LEAVE':
-            print(colored('✘ leave instruction', 'red'))
-            return False
-        if i.mnemonic == 'CALL':
-            print(colored('✘ call instruction', 'red'))
-            return False
-        if i.mnemonic == 'MOV r/m32,r32' and i.dst == g.instructions[0].dst:
-            print(colored('✘ conflicting instructions', 'red'))
-            return False
-        if i.dst == 'esp':
-            print(colored('✘ write on ESP', 'red'))
-            return False
-    print(colored('✓ potential gadget', 'green'))
-    return True
 
 
 def check_gadget_validity(g, controlled_regs):
@@ -132,56 +87,39 @@ def check_gadget_validity(g, controlled_regs):
 
 def _print_rule_validation(glist):
     """ Prints the rule check detail for every gadget in a list """
+    def _check_ruleset(g):
+        if g.instructions[0].src == 'esp' or g.instructions[0].dst == 'esp':
+            print(colored('✘ forbidden access to/from ESP', 'red'))
+            return False
+        if g.instructions[len(g.instructions) - 1].label != 'ret;':
+            print(colored('✘ ret to address', 'red'))
+            return False
+        for i in g.instructions[1:]:
+            if i.mnemonic == 'LEAVE':
+                print(colored('✘ leave instruction', 'red'))
+                return False
+            if i.mnemonic == 'CALL':
+                print(colored('✘ call instruction', 'red'))
+                return False
+            if i.dst == g.instructions[0].dst:
+                print(colored('✘ conflicting instructions', 'red'))
+                return False
+            if i.dst == 'esp':
+                print(colored('✘ write on ESP', 'red'))
+                return False
+        print(colored('✓ potential gadget', 'green'))
+        return True
+
     for g in glist:
-        check_memwrite_rules(g)
+        _check_ruleset(g)
         print(g)
 
 
-def find_matching_format(insn, ex, pop_gadgets_list, verbose=False):
-    glist = []
-    matching_glist = []
-
-    if insn.mnemonic == 'MOV r/m32,imm32':
-        glist = ex.search_gadgets('mov [e??], e??')
-        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
-        for g in glist:
-            if not is_controllable(insn.dst, pop_gadgets_list):
-                print(colored('✘ register(s) not controlled', 'red'))
-            if check_memwrite_rules(g):
-                matching_glist.append(g)
-            print(g)
-
-    if insn.mnemonic == 'MOV r/m32,r32':
-        # Register moves and mem moves share the same opcode/mnemonic
-        if insn.label.find('ptr') != -1:
-            glist = ex.search_gadgets('mov [e??], e??')
-        else:
-            glist = ex.search_gadgets('mov e??, e??')
-
-        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
-        for g in glist:
-            if not is_controllable(insn.src, pop_gadgets_list) or \
-                    not is_controllable(insn.dst, pop_gadgets_list):
-                print(colored('✘ register(s) not controlled', 'red'))
-            if check_memwrite_rules(g):
-                matching_glist.append(g)
-            print(g)
-
-    if insn.mnemonic == 'MOV r32,r/m32':
-        glist = ex.search_gadgets('mov e??, [e??]')
-        glist = sorted(glist, key=lambda gadget: len(gadget.instructions))
-        for g in glist:
-            if not is_controllable(insn.src, pop_gadgets_list) or \
-                    not is_controllable(insn.dst, pop_gadgets_list):
-                print(colored('✘ register(s) not controlled', 'red'))
-            if check_memread_rules(g):
-                matching_glist.append(g)
-            print(g)
-
-    return matching_glist
-
-
 def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
+    """
+    Checks if a src register can be moved to a target register with no side
+    effects.
+    """
     print("-> Trying to move %s to %s" % (src, dst))
     # Direct move
     for g in mov_gadget_dict['register_move']:
@@ -213,7 +151,24 @@ def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
 def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
                gadget_chain, visited=[]):
     """
+    Checks if a non conflicting (ie: w/o side effects) register move chain can
+    be found to transfer a given src register to a target one. If so, the
+    corresponding gadget(s) is(are) added to the gadget chain in parameters.
 
+    Args:
+        src: String representing the source register
+
+        dst: String representing the target register
+
+        payload_insn: target payload Instruction
+
+        regmove_glist: List of register move gadgets
+
+        move_mapping: Dict containing Lists of register movements in the
+        current context (direct, chained or missing)
+
+    Returns:
+        True if a move chain is found, False otherwise
     """
     print("Visited regs: %s" % colored(' '.join(str(r) for r in visited),
                                        'cyan'))
@@ -246,6 +201,18 @@ def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
 
 
 def search_regmov_conflict(payload_insn, target_gadget):
+    """
+    Search for a conflicting register move between a given instruction and a
+    target gadget.
+
+    Args:
+        payload_insn: payload instruction used to check for possible conflicts
+        
+        target_gadget: potential Gadget found in the binary
+
+    Returns:
+        True if a conflict has been found, False otherwise.
+    """
     if payload_insn.label.find('ptr') == -1:
         unavailable_regs = []
     else:
@@ -266,21 +233,26 @@ def search_regmov_conflict(payload_insn, target_gadget):
 
 
 def print_chain(gadget_chain):
+    """ Prints all the gadgets from a given chain """
     for g in gadget_chain:
         print(g)
 
 
 def print_stack(gadget_chain):
+    """ Prepare and prints a visualization of the stack holding the payload"""
     CELL_WIDTH = 58
 
     def _stack_cell(size, value, desc):
+        """ Prints a stack cell with a given value and description """
         print("|" + " "*size + "<"+str(value)+">" + " "*size + "| " +
               colored(desc, 'yellow'))
 
     def _stack_separator(size=CELL_WIDTH):
+        """ Prints a separator between two stack cells """
         print("+" + "-"*int(size/2) + "+")
 
     def _prepare_stack(gadget):
+        """ Inserts a placeholder value to be popped by subsequent gadgets """
         for index, insn in enumerate(g.instructions, start=0):
             if insn.mnemonic == 'POP r32':
                 label = colored("value to be popped", "cyan")
@@ -297,6 +269,25 @@ def print_stack(gadget_chain):
 
 
 def solve_chain(chain_type, payload_insn, mov_gadget_dict, move_mapping):
+    """
+    Tries to find a side-effect free gadget chain that matches a given payload
+    instruction.
+
+    Args:
+        chain_type: String representing the type of chain searched
+            (register_move, memory_read, memory_write)
+
+        payload_insn: target payload Instruction
+
+        mov_gadget_dict: Dict containing Lists of all gadgets found for each
+            each type of mov instructions.
+
+        move_mapping: Dict containing Lists of register movements in the
+            current context (direct, chained or missing)
+
+    Returns:
+        List of gadgets consituting the chain, None if none is found.
+    """
 
     gadget_chain = []
 
@@ -389,11 +380,14 @@ def find_chain(payload_insn, mov_gadget_dict, move_mapping):
     matches a given payload instruction.
 
     Args:
-    payload_insn: String representing the payload instruction.
-    mov_gadget_dict: Dict containing lists of diff mov gadgets available.
-    move_mapping: Dict representing the possible movements.
+        payload_insn: String representing the payload instruction.
+
+        mov_gadget_dict: Dict containing lists of diff mov gadgets available.
+
+        move_mapping: Dict representing the possible movements.
+
     Returns:
-    An ordered list of gadgets constituting the chain.
+        An ordered list of gadgets constituting the chain.
     """
     if payload_insn.mnemonic == 'MOV r/m32,r32':
         gadget_chain = solve_chain('memory_write', payload_insn,
@@ -577,7 +571,7 @@ if __name__ == '__main__':
         print("-" * 80)
         print(colored('DEBUG: ' + insn.label, 'yellow'))
         gchain = find_chain(insn, gadgets_lists, move_mapping)
-        
+
         print()
         print(colored("Target: "+insn.label, "yellow"))
         print_chain(gchain)
