@@ -15,7 +15,7 @@ import argparse
 
 from termcolor import colored
 from capstone import CS_ARCH_X86, CS_MODE_32
-from Structures import Instruction
+from Structures import Gadget, Instruction
 
 
 options = {
@@ -50,11 +50,11 @@ def is_controllable(target_reg, controlled_regs):
     Check if register is controlled (ie: a pop reg; ret; gadget exists)
 
     Args:
-            reg: String representing the register.
-            controlled_regs: List of Gadget objects
+    reg: String representing the register.
+    controlled_regs: List of Gadget objects
 
     Returns:
-            True if the register is found, False otherwise
+    True if the register is found, False otherwise
     """
     for reg in controlled_regs:
         if target_reg == reg:
@@ -115,15 +115,17 @@ def check_gadget_validity(g, controlled_regs):
     Checks a set of rules on a given gadget, returns True if all are passed
     False otherwise.
     """
-    if g.instructions[0].src == 'esp' or\
-       g.instructions[0].dst == 'esp' or\
-       g.instructions[len(g.instructions)-1].label != 'ret;':
+    gadget_src = g.instructions[0].src
+    gadget_dst = g.instructions[0].dst
+    if gadget_src == 'esp' or\
+            gadget_dst == 'esp' or\
+            g.instructions[len(g.instructions)-1].label != 'ret;':
         return False
     for i in g.instructions[1:]:
         if i.mnemonic == 'CALL' or\
-           i.mnemonic == 'LEAVE' or\
-           i.mnemonic == 'MOV r/m32,r32' and i.dst == g.instructions[0].dst or\
-           i.dst == 'esp':
+                i.mnemonic == 'LEAVE' or\
+                i.mnemonic == 'MOV r/m32,r32' and i.dst == gadget_dst or\
+                i.dst == 'esp':
             return False
     return True
 
@@ -150,7 +152,7 @@ def find_matching_format(insn, ex, pop_gadgets_list, verbose=False):
             print(g)
 
     if insn.mnemonic == 'MOV r/m32,r32':
-        # need to differentiate between reg to mem and reg to reg
+        # Register moves and mem moves share the same opcode/mnemonic
         if insn.label.find('ptr') != -1:
             glist = ex.search_gadgets('mov [e??], e??')
         else:
@@ -209,10 +211,13 @@ def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
 
 
 def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
-               visited=[]):
+               gadget_chain, visited=[]):
+    """
 
+    """
     print("Visited regs: %s" % colored(' '.join(str(r) for r in visited),
-                                            'red'))
+                                       'cyan'))
+
     for reg in move_mapping[src]['direct']:
         if reg == dst and reg != src:
             for g in regmove_glist:
@@ -221,20 +226,22 @@ def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
                     print("Move %s to %s" % (src, reg))
                     print(g)
                     if not search_regmov_conflict(payload_insn, g):
+                        gadget_chain.append(g)
                         return True
 
     for reg in move_mapping[src]['direct']:
         if reg not in visited and reg != src:
             visited.append(reg)
             print("Move %s to %s" % (src, reg))
-            for gadget in regmove_glist:
-                if gadget.instructions[0].src == src and\
-                        gadget.instructions[0].dst == reg:
-                    if not search_regmov_conflict(payload_insn, gadget):
-                        print(gadget)
+            for g in regmove_glist:
+                if g.instructions[0].src == src and\
+                        g.instructions[0].dst == reg:
+                    if not search_regmov_conflict(payload_insn, g):
+                        print(g)
+                        gadget_chain.append(g)
                         return is_movable(reg, dst, payload_insn,
-                                          regmove_glist, move_mapping, visited)
-
+                                          regmove_glist, move_mapping,
+                                          gadget_chain, visited)
     return False
 
 
@@ -251,14 +258,128 @@ def search_regmov_conflict(payload_insn, target_gadget):
     for i in target_gadget.instructions[1:]:
         if i.dst in unavailable_regs:
             print("Conflicting instructions during mov sequence")
-            print("Conflict on: " + i.dst)
-            print(colored(target_gadget, 'red'))
+            print(colored("Conflict on: " + i.dst, 'red'))
+            print(target_gadget)
             return True
 
     return False
 
 
-def solve_memwrite_chain(src, dst, insn, mov_gadget_dict, move_mapping):
+def print_chain(gadget_chain):
+    for g in gadget_chain:
+        print(g)
+
+
+def print_stack(gadget_chain):
+    CELL_WIDTH = 58
+
+    def _stack_cell(size, value, desc):
+        print("|" + " "*size + "<"+str(value)+">" + " "*size + "| " +
+              colored(desc, 'yellow'))
+
+    def _stack_separator(size=CELL_WIDTH):
+        print("+" + "-"*int(size/2) + "+")
+
+    def _prepare_stack(gadget):
+        for index, insn in enumerate(g.instructions, start=0):
+            if insn.mnemonic == 'POP r32':
+                label = colored("value to be popped", "cyan")
+                _stack_cell(len(str(g.address)), "0x0000000", label)
+                _stack_separator()
+
+    print(" "*13 + "STACK")
+    _stack_separator()
+    for index, g in enumerate(gadget_chain, start=1):
+        _prepare_stack(g)
+        label = "address of G"+str(index)
+        _stack_cell(len(str(g.address)), hex(g.address), label)
+        _stack_separator()
+
+
+def solve_chain(chain_type, payload_insn, mov_gadget_dict, move_mapping):
+
+    gadget_chain = []
+
+    if payload_insn.label.find('ptr') == -1:
+        print("Case 0: register move")
+        if is_movable(payload_insn.src, payload_insn.dst, payload_insn,
+                      mov_gadget_dict['register_move'], move_mapping,
+                      gadget_chain,
+                      visited=[]):
+            print(colored("✓ Chain found", 'green'))
+            return gadget_chain
+    else:
+        # Case 1
+        for g in mov_gadget_dict[chain_type]:
+            if g.instructions[0].dst == payload_insn.dst and \
+                    g.instructions[0].src == payload_insn.src:
+                gadget_chain.append(g)
+                print("Case 1: same src same dst")
+                print(g)
+                print(colored("✓ Chain found", 'green'))
+                return gadget_chain
+        # Case 2
+        for g in mov_gadget_dict[chain_type]:
+            if g.instructions[0].dst == payload_insn.dst and \
+                    g.instructions[0].src != payload_insn.src:
+                print("Case 2: same dst, diff src")
+                print("Target gadget:")
+                print(g)
+                print("Objective: mov %s to %s" % (payload_insn.src,
+                                                   g.instructions[0].src))
+                if is_movable(payload_insn.src, g.instructions[0].src,
+                              payload_insn,
+                              mov_gadget_dict['register_move'],
+                              move_mapping,
+                              gadget_chain,
+                              visited=[]):
+                    gadget_chain.append(g)
+                    print(colored("✓ Chain found", 'green'))
+                    return gadget_chain
+        # Case 3
+        for g in mov_gadget_dict[chain_type]:
+            if g.instructions[0].dst != payload_insn.dst and \
+                    g.instructions[0].src == payload_insn.src:
+                print("Case 3: diff dst, same src")
+                print("Target gadget:")
+                print(g)
+                print("Objective: mov %s to %s" % (payload_insn.dst,
+                                                   g.instructions[0].dst))
+                if is_movable(payload_insn.dst, g.instructions[0].dst,
+                              payload_insn,
+                              mov_gadget_dict['register_move'],
+                              move_mapping,
+                              gadget_chain,
+                              visited=[]):
+                    gadget_chain.append(g)
+                    print(colored("✓ Chain found", 'green'))
+                    return gadget_chain
+        # Case 4
+        for g in mov_gadget_dict[chain_type]:
+            if g.instructions[0].dst != payload_insn.dst and \
+                    g.instructions[0].src != payload_insn.src:
+                print("Case 4: diff dst, diff src")
+                print("Target gadget:")
+                print(g)
+                print("Objective 1: mov %s to %s" % (payload_insn.dst,
+                                                     g.instructions[0].dst))
+                if is_movable(payload_insn.dst, g.instructions[0].dst,
+                              payload_insn,
+                              mov_gadget_dict['register_move'],
+                              move_mapping,
+                              gadget_chain,
+                              visited=[]):
+                    print("Objective 2: mov %s to %s" % (payload_insn.src,
+                                                         g.instructions[0].src))
+                    if is_movable(payload_insn.src, g.instructions[0].src,
+                                  payload_insn,
+                                  mov_gadget_dict['register_move'],
+                                  move_mapping,
+                                  gadget_chain,
+                                  visited=[]):
+                        gadget_chain.append(g)
+                        print(colored("✓ Chain found", 'green'))
+                        return gadget_chain
     return
 
 
@@ -268,91 +389,24 @@ def find_chain(payload_insn, mov_gadget_dict, move_mapping):
     matches a given payload instruction.
 
     Args:
-        payload_insn: String representing the payload instruction.
-        mov_gadget_dict: Dict containing lists of diff mov gadgets available.
-        move_mapping: Dict representing the possible movements.
+    payload_insn: String representing the payload instruction.
+    mov_gadget_dict: Dict containing lists of diff mov gadgets available.
+    move_mapping: Dict representing the possible movements.
     Returns:
-        An ordered list of gadgets constituting the chain.
+    An ordered list of gadgets constituting the chain.
     """
     if payload_insn.mnemonic == 'MOV r/m32,r32':
-        if payload_insn.label.find('ptr') == -1:
-            print("Case 0: register move")
-            if is_movable(payload_insn.src, payload_insn.dst, payload_insn,
-                          mov_gadget_dict['register_move'], move_mapping,
-                          visited=[]):
-                print(colored("✓ Chain found", 'green'))
-                return
-    # Case 1
-    for g in mov_gadget_dict['memory_write']:
-        if g.instructions[0].dst == payload_insn.dst and \
-                g.instructions[0].src == payload_insn.src:
-            print("Case 1: same src same dst")
-            print(g)
-            print(colored("✓ Chain found", 'green'))
-            return
-    # Case 2
-    for g in mov_gadget_dict['memory_write']:
-        if g.instructions[0].dst == payload_insn.dst and \
-                g.instructions[0].src != payload_insn.src:
-            print("Case 2: same dst, diff src")
-            print("Target gadget:")
-            print(g)
-            print("Objective: mov %s to %s" % (payload_insn.src,
-                                               g.instructions[0].src))
-            if is_movable(payload_insn.src,
-                          g.instructions[0].src,
-                          payload_insn,
-                          mov_gadget_dict['register_move'],
-                          move_mapping,
-                          visited=[]):
-                print(colored("✓ Chain found", 'green'))
-                return
-    # Case 3
-    for g in mov_gadget_dict['memory_write']:
-        if g.instructions[0].dst != payload_insn.dst and \
-                g.instructions[0].src == payload_insn.src:
-            print("Case 3: diff dst, same src")
-            print("Target gadget:")
-            print(g)
-            print("Objective: mov %s to %s" % (payload_insn.dst,
-                                               g.instructions[0].dst))
-            if is_movable(payload_insn.dst,
-                          g.instructions[0].dst,
-                          payload_insn,
-                          mov_gadget_dict['register_move'],
-                          move_mapping,
-                          visited=[]):
-                print(colored("✓ Chain found", 'green'))
-                return
-    # Case 4
-    for g in mov_gadget_dict['memory_write']:
-        if g.instructions[0].dst != payload_insn.dst and \
-                g.instructions[0].src != payload_insn.src:
-            print("Case 4: diff dst, diff src")
-            print("Target gadget:")
-            print(g)
-            print("Objective 1: mov %s to %s" % (payload_insn.dst,
-                                                 g.instructions[0].dst))
-            if is_movable(payload_insn.dst,
-                          g.instructions[0].dst,
-                          payload_insn,
-                          mov_gadget_dict['register_move'],
-                          move_mapping,
-                          visited=[]):
-                print("Objective 2: mov %s to %s" % (payload_insn.src,
-                                                     g.instructions[0].src))
+        gadget_chain = solve_chain('memory_write', payload_insn,
+                                   mov_gadget_dict, move_mapping)
 
-                if is_movable(payload_insn.src,
-                              g.instructions[0].src,
-                              payload_insn,
-                              mov_gadget_dict['register_move'],
-                              move_mapping,
-                              visited=[]):
-                    print(colored("✓ Chain found", 'green'))
-                    return
+    if payload_insn.mnemonic == 'MOV r32,r/m32':
+        gadget_chain = solve_chain('memory_read', payload_insn,
+                                   mov_gadget_dict, move_mapping)
 
-    print("%s\n" % colored("✘ Chain not found", 'red'))
-    return
+    if not gadget_chain:
+        print("%s\n" % colored("✘ Chain not found", 'red'))
+
+    return gadget_chain
 
 
 if __name__ == '__main__':
@@ -427,12 +481,16 @@ if __name__ == '__main__':
                     'ecx', 'ebp'),
         Instruction('mov eap, ecx', 0x12345678, 'MOV r/m32,r32',
                     'eax', 'ecx'),
-        Instruction('mov dword ptr [edi], eax', 0x12345678, 'mov r/m32, r32',
+        Instruction('mov dword ptr [edi], eax', 0x12345678, 'MOV r/m32,r32',
                     'edi', 'eax'),
-        Instruction('mov dword ptr [ebx], ecx', 0x12345678, 'mov r/m32, r32',
+        Instruction('mov dword ptr [ebx], ecx', 0x12345678, 'MOV r/m32,r32',
                     'ebx', 'ecx'),
-        Instruction('mov dword ptr [esp], eax', 0x12345678, 'mov r/m32, r32',
-                    'esp', 'eax'),
+        Instruction('mov dword ptr [edi], ecx', 0x12345678, 'MOV r/m32,r32',
+                    'edi', 'ecx'),
+        Instruction('mov dword ptr eax, [edx]', 0x12345678, 'MOV r32,r/m32',
+                    'eax', 'edx'),
+        Instruction('mov dword ptr ebx, [ecx]', 0x12345678, 'MOV r32,r/m32',
+                    'ebx', 'ecx'),
     ]
 
     print("Register move gadgets: ")
@@ -483,8 +541,8 @@ if __name__ == '__main__':
             dst = g.instructions[0].dst
             for m in move_mapping[reg]["direct"]:
                 if src == m and \
-                   dst not in move_mapping[reg]["direct"] and \
-                   dst not in move_mapping[reg]["chained"]:
+                        dst not in move_mapping[reg]["direct"] and \
+                        dst not in move_mapping[reg]["chained"]:
                     move_mapping[reg]["chained"].append(dst)
 
         # Find the possible chains within the 2-chain mov list (length 3+).
@@ -493,14 +551,14 @@ if __name__ == '__main__':
             dst = g.instructions[0].dst
             for m in move_mapping[reg]["chained"]:
                 if src == m and \
-                  dst not in move_mapping[reg]["direct"] and \
-                  dst not in move_mapping[reg]["chained"]:
+                        dst not in move_mapping[reg]["direct"] and \
+                        dst not in move_mapping[reg]["chained"]:
                     move_mapping[reg]["chained"].append(dst)
 
         # Appends the missing destinations to the missing list.
         for k in move_mapping.keys():
             if k not in move_mapping[reg]["direct"] and \
-               k not in move_mapping[reg]["chained"]:
+                    k not in move_mapping[reg]["chained"]:
                 move_mapping[reg]["missing"].append(k)
 
         if move_mapping[reg]["direct"]:
@@ -517,8 +575,14 @@ if __name__ == '__main__':
     # Search a gadget chain for each test instruction in our list
     for insn in debug_instructions:
         print("-" * 80)
-        print("DEBUG: %s" % colored(insn.label, 'yellow'))
-        find_chain(insn, gadgets_lists, move_mapping)
+        print(colored('DEBUG: ' + insn.label, 'yellow'))
+        gchain = find_chain(insn, gadgets_lists, move_mapping)
+        
+        print()
+        print(colored("Target: "+insn.label, "yellow"))
+        print_chain(gchain)
+        print_stack(gchain)
+        print()
 
     print("Possible memory write: ")
     for reg in move_mapping.keys():
