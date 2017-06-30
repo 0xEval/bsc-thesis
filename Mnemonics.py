@@ -8,10 +8,20 @@
 # -----------------------------------------------------------------------------
 
 OPCODES = {
-    0x89: 'MOV r/m32,r32',    # Move r16(or 32) to r/m16(or 32).
-    0x8B: 'MOV r32,r/m32',    # Move r/m16 to r16.
-    0xB8: 'MOV r32,imm32',    # Move imm16(or 32) to r16(or 32).
-    0xC7: 'MOV r/m32,imm32',  # Move imm16(or 32) to r/m16(or 32).
+    0x89: 'MOV r/m32,r32',    # Memory WRITE (or register move) w/ 32bits regs
+    0xC7: 'MOV r/m32,imm32',  # Memory WRITE from an imm value
+    0xC705: 'MOV r/m32,imm32',  # mov dword ptr ds:0x(...), imm32
+    0xB8: 'MOV r/m32,imm32',  # mov eax, 0x(...)
+    0xBB: 'MOV r/m32,imm32',  # mov ebx, 0x(...)
+    0xB9: 'MOV r/m32,imm32',  # mov ecx, 0x(...)
+    0xBA: 'MOV r/m32,imm32',  # mov edx, 0x(...)
+
+    0x8B: 'MOV r32,r/m32',    # Memory READ w/ 32bits registers.
+    0xA1: 'MOV r32,imm32',    # mov eax, ds:0x0
+    0x8B1D: 'MOV r32,imm32',  # mov ebx, ds:0x0
+    0x8B0D: 'MOV r32,imm32',  # mov ecx, ds:0x0
+    0x8B15: 'MOV r32,imm32',  # mov edx, ds:0x0
+
     0x58: 'POP r32',          # Pop top of stack into r32; incr SP.
     0x59: 'POP r32',
     0x5A: 'POP r32',
