@@ -10,7 +10,6 @@
 # GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
-
 import Extractor
 import Disasm
 import argparse
@@ -18,7 +17,7 @@ import argparse
 from termcolor import colored
 from capstone import CS_ARCH_X86, CS_MODE_32
 from Structures import Instruction
-
+from Mnemonics import OPCODES
 
 options = {
     'color': False,
@@ -100,6 +99,14 @@ def is_reg_movable(src, dst, mov_gadget_dict, payload_insn):
     return False
 
 
+def is_supported(payload_insn):
+    """ Check if a given payload instruction is supported """
+    if payload_insn.mnemonic in OPCODES.values():
+        return True
+    print(colored("Not supported", "red"))
+    return False
+
+
 def check_gadget_validity(g, controlled_regs):
     """
     Checks a set of rules on a given gadget, returns True if all are passed
@@ -140,7 +147,8 @@ def search_regmov_conflict(payload_insn, target_gadget):
 
     if target_gadget.instructions[0].src == payload_insn.dst:
         unavailable_regs.append(target_gadget.instructions[0].dst)
-        unavailable_regs.remove(payload_insn.dst)
+        if payload_insn.dst in unavailable_regs:
+            unavailable_regs.remove(payload_insn.dst)
 
     for i in target_gadget.instructions[1:]:
         if i.dst in unavailable_regs:
@@ -150,6 +158,69 @@ def search_regmov_conflict(payload_insn, target_gadget):
             return True
 
     return False
+
+
+def map_possible_movements(move_type, gagdgets_lists):
+    """
+     Each register is associated with 3 lists mapping the possible
+     Register to register move:
+     - direct: list for direct moves (ex: mov eax, ebx)
+     - chained: list with chained moves 1...n
+       (ex: mov ecx, eax is not available directly, instead we have a chain:
+           mov edx, eax --> mov ecx, edx).
+    """
+    move_mapping = {}
+    for reg in reglist:
+        move_mapping[reg] = {'direct': [], 'chained': [], 'missing': []}
+
+    if move_type == 'register_move':
+        for reg in move_mapping.keys():
+            # Find the direct mov possibilites in the Reg-to-Reg gadget list.
+            for g in gadgets_lists['register_move']:
+                src = g.instructions[0].src
+                dst = g.instructions[0].dst
+                if src == reg and dst not in move_mapping[reg]["direct"]:
+                    move_mapping[reg]["direct"].append(dst)
+
+            # Find the possible chains within the direct mov list (length 2).
+            for g in gadgets_lists['register_move']:
+                src = g.instructions[0].src
+                dst = g.instructions[0].dst
+                for m in move_mapping[reg]["direct"]:
+                    if src == m and \
+                            dst not in move_mapping[reg]["direct"] and \
+                            dst not in move_mapping[reg]["chained"]:
+                        move_mapping[reg]["chained"].append(dst)
+
+            # Find the possible chains within the 2-chain mov list (length 3+).
+            for g in gadgets_lists['register_move']:
+                src = g.instructions[0].src
+                dst = g.instructions[0].dst
+                for m in move_mapping[reg]["chained"]:
+                    if src == m and \
+                            dst not in move_mapping[reg]["direct"] and \
+                            dst not in move_mapping[reg]["chained"]:
+                        move_mapping[reg]["chained"].append(dst)
+
+            # Appends the missing destinations to the missing list.
+            for k in move_mapping.keys():
+                if k not in move_mapping[reg]["direct"] and \
+                        k not in move_mapping[reg]["chained"]:
+                    move_mapping[reg]["missing"].append(k)
+    else:
+        for reg in move_mapping.keys():
+            for g in gadgets_lists[move_type]:
+                dst = g.instructions[0].dst
+                src = g.instructions[0].src
+                if src == reg and dst not in move_mapping[reg]["direct"]:
+                    move_mapping[reg]["direct"].append(dst)
+
+            # Appends the missing destinations to the missing list.
+            for k in move_mapping.keys():
+                if k not in move_mapping[reg]["direct"]:
+                    move_mapping[reg]["missing"].append(k)
+
+    return move_mapping
 
 
 def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
@@ -182,12 +253,12 @@ def is_movable(src, dst, payload_insn, regmove_glist, move_mapping,
                 gadget_chain.append(pg)
                 return True
         return False
-    
+
     if dst not in ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']:
         debug("Constant")
         for pg in pop_gadgets:
             debug(pg)
-            if pg.instructions[0].dst == scx:
+            if pg.instructions[0].dst == src:
                 gadget_chain.append(pg)
                 return True
         return False
@@ -443,13 +514,16 @@ def print_stack(gadget_chain, payload_insn):
 
 
 def print_statistics(total, supported, assumed):
+    """ Prints approximative stats of the program's results """
     print("Total instructions: {}".format(colored(total, 'yellow')))
     print("Supported: {} [{}%] "
-          "- All assumptions".format(colored(supported, 'yellow'),
+          "- All assumptions".format(colored(supported, 'green'),
                                      int((supported/total)*100)))
     print("Supported: {} [{}%] "
-          "- No offsets".format(colored(abs(supported-assumed), 'yellow'),
+          "- No offsets".format(colored(abs(supported-assumed), 'green'),
                                 int((abs(supported-assumed)/total)*100)))
+    print("Not supported: {} [{}%]".format(colored(total-supported, 'red'),
+                                           int(((total-supported)/total)*100)))
 
 
 def debug(msg):
@@ -495,21 +569,6 @@ if __name__ == '__main__':
                                 key=lambda gadget: len(gadget.instructions)),
     }
 
-    reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
-    controlled_regs = []
-
-    for reg in pop_gadgets:
-        if reg not in controlled_regs:
-            controlled_regs.append(reg.instructions[0].dst)
-
-    missing_regs = list(set(reglist) - set(controlled_regs))
-
-    for gtype in gadgets_lists.keys():
-        gadgets_lists[gtype] = [
-            g for g in gadgets_lists[gtype]
-            if check_gadget_validity(g, controlled_regs)
-        ]
-
     # Test cases with manual instructions used to find gadget chains
     debug_instructions = [
         Instruction('mov ecx, ebp', 0x12345678, 'MOV r/m32,r32',
@@ -533,6 +592,21 @@ if __name__ == '__main__':
         Instruction('mov eax, 0x8000000', 0x12345678, 'MOV r/m32,imm32',
                     'eax', '0x8000000'),
     ]
+
+    reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
+    controlled_regs = []
+
+    for reg in pop_gadgets:
+        if reg not in controlled_regs:
+            controlled_regs.append(reg.instructions[0].dst)
+
+    missing_regs = list(set(reglist) - set(controlled_regs))
+
+    for gtype in gadgets_lists.keys():
+        gadgets_lists[gtype] = [
+            g for g in gadgets_lists[gtype]
+            if check_gadget_validity(g, controlled_regs)
+        ]
 
     print("Dumping target payload <%s>:" % obj)
     print("-" * 80)
@@ -570,91 +644,75 @@ if __name__ == '__main__':
         print("Missing: \n\t%s" %
               colored(' '.join(str(mr) for mr in missing_regs), 'red'))
 
-    # Each register is associated with 3 lists mapping the possible
-    # Register to register move:
-    # - direct: list for direct moves (ex: mov eax, ebx)
-    # - chained: list with chained moves 1...n
-    #   (ex: mov ecx, eax is not available directly, instead we have a chain:
-    #       mov edx, eax --> mov ecx, edx).
-
-    move_mapping = {}
-    for reg in reglist:
-        move_mapping[reg] = {'direct': [], 'chained': [], 'missing': []}
+    regmove_map = map_possible_movements('register_move', gadgets_lists)
+    memwrite_map = map_possible_movements('memory_write', gadgets_lists)
+    memread_map = map_possible_movements('memory_read', gadgets_lists)
 
     print("Possible reg mov:")
     print("\tsrc: dst (green = direct mov, blue = chained)")
-    for reg in move_mapping.keys():
-        # Find the direct mov possibilites in the Reg-to-Reg gadget list.
-        for g in gadgets_lists['register_move']:
-            src = g.instructions[0].src
-            dst = g.instructions[0].dst
-            if src == reg and dst not in move_mapping[reg]["direct"]:
-                move_mapping[reg]["direct"].append(dst)
-
-        # Find the possible chains within the direct mov list (length 2).
-        for g in gadgets_lists['register_move']:
-            src = g.instructions[0].src
-            dst = g.instructions[0].dst
-            for m in move_mapping[reg]["direct"]:
-                if src == m and \
-                        dst not in move_mapping[reg]["direct"] and \
-                        dst not in move_mapping[reg]["chained"]:
-                    move_mapping[reg]["chained"].append(dst)
-
-        # Find the possible chains within the 2-chain mov list (length 3+).
-        for g in gadgets_lists['register_move']:
-            src = g.instructions[0].src
-            dst = g.instructions[0].dst
-            for m in move_mapping[reg]["chained"]:
-                if src == m and \
-                        dst not in move_mapping[reg]["direct"] and \
-                        dst not in move_mapping[reg]["chained"]:
-                    move_mapping[reg]["chained"].append(dst)
-
-        # Appends the missing destinations to the missing list.
-        for k in move_mapping.keys():
-            if k not in move_mapping[reg]["direct"] and \
-                    k not in move_mapping[reg]["chained"]:
-                move_mapping[reg]["missing"].append(k)
-
-        if move_mapping[reg]["direct"]:
+    for reg in regmove_map.keys():
+        if regmove_map[reg]["direct"]:
             print("\t%s: %s %s %s" % (
                 reg,
                 colored(' '.join(
-                    str(m) for m in move_mapping[reg]["direct"]), 'green'),
+                    str(m) for m in regmove_map[reg]["direct"]), 'green'),
                 colored(' '.join(
-                    str(m) for m in move_mapping[reg]["chained"]), 'cyan'),
+                    str(m) for m in regmove_map[reg]["chained"]), 'cyan'),
                 colored(' '.join(
-                    str(m) for m in move_mapping[reg]["missing"]), 'red'),
+                    str(m) for m in regmove_map[reg]["missing"]), 'red'),
             ))
+
+    print("Possible memory write: ")
+    for reg in memwrite_map.keys():
+        if memwrite_map[reg]["direct"]:
+            print("\t%s: %s %s" % (
+                reg,
+                colored(' '.join(
+                    str(m) for m in memwrite_map[reg]["direct"]), 'green'),
+                colored(' '.join(
+                    str(m) for m in memwrite_map[reg]["missing"]), 'red'),
+            ))
+
+    print("Possible memory read: ")
+    for reg in memread_map.keys():
+        if memread_map[reg]["direct"]:
+            print("\t%s: %s %s" % (
+                reg,
+                colored(' '.join(
+                    str(m) for m in memread_map[reg]["direct"]), 'green'),
+                colored(' '.join(
+                    str(m) for m in memread_map[reg]["missing"]), 'red'),
+            ))
+    print()
 
     # Search a gadget chain for each test instruction in our list
     supported_insns = 0
     assumed_insns = 0
     for insn in payload_insns:
-        if insn.src_offset or insn.dst_offset:
-            assumed_insns += 1
         print("-"*80)
         print()
-        gchain = find_chain(insn, gadgets_lists, move_mapping)
         print(colored("Target: "+insn.label, "yellow"))
-        debug(insn.src)
-        debug(insn.dst)
-        debug(insn.mnemonic)
-        if gchain:
-            supported_insns += 1
-            print_chain(gchain)
-            print_stack(gchain, insn)
-        else:
-            print(colored("No chain found", "red"))
-        print()
+        if is_supported(insn):
+            if insn.src_offset or insn.dst_offset:
+                assumed_insns += 1
+            gchain = find_chain(insn, gadgets_lists, regmove_map)
+            debug(insn.src)
+            debug(insn.dst)
+            debug(insn.mnemonic)
+            if gchain:
+                supported_insns += 1
+                print_chain(gchain)
+                print_stack(gchain, insn)
+            else:
+                print(colored("No chain found", "red"))
+            print()
     print_statistics(len(payload_insns), supported_insns, assumed_insns)
 
     if DEBUG:
         for insn in debug_instructions:
             print("-"*80)
             print()
-            gchain = find_chain(insn, gadgets_lists, move_mapping)
+            gchain = find_chain(insn, gadgets_lists, regmove_map)
             print(colored("Target: "+insn.label, "yellow"))
             print(insn.src)
             print(insn.dst)
@@ -664,53 +722,3 @@ if __name__ == '__main__':
                 print_stack(gchain, insn)
             else:
                 print(colored("No chain found", "red"))
-
-    print("Possible memory write: ")
-    for reg in move_mapping.keys():
-        del move_mapping[reg]["direct"][:]
-        del move_mapping[reg]["missing"][:]
-
-        for g in gadgets_lists['memory_write']:
-            dst = g.instructions[0].dst
-            src = g.instructions[0].src
-            if src == reg and dst not in move_mapping[reg]["direct"]:
-                move_mapping[reg]["direct"].append(dst)
-
-        # Appends the missing destinations to the missing list.
-        for k in move_mapping.keys():
-            if k not in move_mapping[reg]["direct"]:
-                move_mapping[reg]["missing"].append(k)
-
-        if move_mapping[reg]["direct"]:
-            print("\t%s: %s %s" % (
-                reg,
-                colored(' '.join(
-                    str(m) for m in move_mapping[reg]["direct"]), 'green'),
-                colored(' '.join(
-                    str(m) for m in move_mapping[reg]["missing"]), 'red'),
-            ))
-
-    print("Possible memory read: ")
-    for reg in move_mapping.keys():
-        del move_mapping[reg]["direct"][:]
-        del move_mapping[reg]["missing"][:]
-
-        for g in gadgets_lists['memory_read']:
-            dst = g.instructions[0].dst
-            src = g.instructions[0].src
-            if src == reg and dst not in move_mapping[reg]["direct"]:
-                move_mapping[reg]["direct"].append(dst)
-
-        # Appends the missing destinations to the missing list.
-        for k in move_mapping.keys():
-            if k not in move_mapping[reg]["direct"]:
-                move_mapping[reg]["missing"].append(k)
-
-        if move_mapping[reg]["direct"]:
-            print("\t%s: %s %s" % (
-                reg,
-                colored(' '.join(
-                    str(m) for m in move_mapping[reg]["direct"]), 'green'),
-                colored(' '.join(
-                    str(m) for m in move_mapping[reg]["missing"]), 'red'),
-            ))
