@@ -16,7 +16,8 @@ import subprocess
 import argparse
 import re
 from capstone import Cs, CsError, CS_ARCH_X86, CS_MODE_32
-from capstone.x86 import X86_OP_REG, X86_OP_IMM, X86_OP_FP, X86_OP_MEM
+from capstone.x86 import X86_OP_REG, X86_OP_IMM, X86_OP_MEM, X86_OP_FP,\
+    X86_OP_INVALID
 from xprint import to_hex, to_x, to_x_32
 
 
@@ -178,12 +179,18 @@ def insn_detail(insn):
     """
     def operand_name(op):
         """ Returns the name(string) of a given operand """
+        name = 'not supported'
         if op.type == X86_OP_REG:
             name = insn.reg_name(op.reg)
         if op.type == X86_OP_IMM:
-            name = op.imm
+            name = hex(op.imm)
         if op.type == X86_OP_MEM:
-            name = insn.reg_name(op.mem.base)
+            if op.mem.base != 0:
+                name = insn.reg_name(op.mem.base)
+            elif op.mem.index != 0:
+                name = insn.reg_name(op.mem.index)
+            else:
+                name = hex(op.mem.disp)
         return name
 
     def get_offset(op):

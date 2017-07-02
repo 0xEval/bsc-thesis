@@ -22,6 +22,8 @@ OPCODES = {
     0x8B0D: 'MOV r32,imm32',  # mov ecx, ds:0x0
     0x8B15: 'MOV r32,imm32',  # mov edx, ds:0x0
 
+    0xA3: 'MOV imm32,r32',    # mov ds:0x0, eax
+
     0x58: 'POP r32',          # Pop top of stack into r32; incr SP.
     0x59: 'POP r32',
     0x5A: 'POP r32',

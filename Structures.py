@@ -2,7 +2,8 @@
 # -----------------------------------------------------------------------------
 # Structures.py
 # Custom data structures for gadgets and instructions.
-# Author: Eval (@cyberjucou)
+# Author: Eval
+# GitHub: https://github.com/jcouvy
 # -----------------------------------------------------------------------------
 
 
