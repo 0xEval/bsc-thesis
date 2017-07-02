@@ -56,12 +56,13 @@ def extract_opcode(dump):
         Hex string made of the opcodes found in dump.
     """
     opcode = ""
+    dump = dump.replace('\t', ' ')
+    dump = dump.replace(' ', '\n')
     for line in dump.splitlines():
-        match = re.search(r' ([\da-f]+):\s+((?:[0-9a-f]{2} )+)', line)
-        tmp = match.group(2).strip().split(' ')
-        for op in tmp:
-            opcode += op
-        opcode += ' '
+        match = re.findall(r'^[0-9a-f]{2}$', line)
+        if match:
+            opcode += match[0]
+            opcode += ' '
     return opcode
 
 
@@ -257,7 +258,7 @@ if __name__ == '__main__':
     target = args.target
 
     objdump = dump_object(target)
-    print("*" * 16)
+    print("-" * 80)
     print("Dumping: " + target + "\n%s" % objdump)
     opcode = extract_opcode(objdump)
     print("\nOpcode: %s" % opcode)
