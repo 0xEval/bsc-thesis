@@ -1,0 +1,121 @@
+\documentclass[10pt,twocolumn]{article}
+
+%%% PACKAGE SETTINGS %%%
+%% Font settings %%
+\usepackage[T1]{fontenc}
+\usepackage{charter}
+
+%% Custom title page %%
+\usepackage[center,small,sc]{titlesec}
+\titleformat{\section}{\normalfont\fontsize{14}{14}\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\fontsize{12}{12}\bfseries}{\thesubsection}{1em}{}
+
+%% Custom margins %%
+\usepackage[nohead, nomarginpar, margin=.7in, foot=.35in]{geometry}
+\setlength{\columnsep}{2em} % set space between two-column format
+
+%% BibTeX citation pkg
+\usepackage{cite}
+
+%% Figures, listings with caption %%
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks,
+    linkcolor={red!50!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage[font=normal,labelfont=bf,textfont={bf,it}]{caption}
+
+\usepackage{lipsum}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage{listings}
+
+\lstset{
+basicstyle=\small\ttfamily,
+frame=single, 
+columns=flexible,
+keepspaces=true,
+linewidth=\columnwidth,
+breaklines=true,
+identifierstyle=\ttfamily,
+keywordstyle=\ttfamily\color[rgb]{0,0,1},
+commentstyle=\ttfamily\color[rgb]{0.133,0.545,0.133},
+stringstyle=\ttfamily\color[rgb]{0.627,0.126,0.941},
+}
+
+%%% DOCUMENT BEGINS %%%
+\begin{document}
+\begin{titlepage}
+	\centering	
+	{\scshape\LARGE Vrije Universiteit Amsterdam\par}
+	\vspace{1cm}
+	{\scshape\Large Bachelor Thesis\par}
+	\vspace{1.5cm}
+	{\huge\bfseries <INSERT TITLE>\par}
+	\vspace{2cm}
+	{\Large\itshape Julien Couvy\par}
+	\vfill
+	supervised by\par
+	Herbert Bos \& Cristiano Giuffrida
+	\vfill
+\end{titlepage}
+
+\begin{abstract}
+	\textbf{
+		\lipsum[1]
+	}
+\end{abstract}
+
+\section{INTRODUCTION}
+\lipsum[1-2]
+\section{BACKGROUND}
+\subsection{Code Injection}
+Low level languages directly compiled to machine code such as C/C++ offer wider possibilites of implementation without the cost of speed. However this freedom has a price, programs written in these languages make use of powerful instructions that can easily backfire on the user if used improperly. Such programs are known to be vulnerable to numerous attacks diverting the control flow during the execution of the program.
+
+This paper will focus on one category of these attacks known as buffer overflows. It is probably one of the most famous software vulnerability but these attacks are still pretty common nowadays. A buffer overflow attack is an anomaly where a program, while writing data to a buffer, overruns the buffer's boundary and overwrites adjacent memory locations. In other words, a buffer overflow condition exists when a program attempts to put more data in a buffer than it can hold or when a program attempts to put data in a memory area past a buffer.
+
+Overflows can be used to modify return address or code pointers in order to execute a malicious piece of code, sometimes already exisiting within the program's space or injected by the attacker. They can be regrouped in two types: stack-based overflows and heap-based overflows. Before going any further it is required to understand how aprocess is organized in memory
+
+\subsection{Return Oriented Programming}
+In this section we will introduce the concept of Return Oriented Programming (ROP)~\cite{roemer_return-oriented_2012}. Traditionnally code injection attacks relies on diverting the normal control flow of a program and introduce arbitrary, usually malicious, behavior. The principal attack vector for injections is a stack buffer overflow, though many other alternatives were invented such as buffer overflows on the heap, integer overflows... To achieve his goal, the attacker must (1) subvert the program's control flow from its normal course, and (2) redirect the program's execution. In traditional stack-smashing attacks, an attacker completes the first task by overwriting a return address on the stack, so that it points to code of his choosing, the \textit{shellcode}, rather than to the function that made the call. However, this kind of attacks was discovered a long time ago and multiple defenses were set up against them: (W+X, DEP...)
+
+Return oriented programming shares the same ideas than return-to-libraries attacks. An attacker who managed to redirect the program's control flow can force it to execute a payload without introducing any new code; there are no code injections at all. Instead, the attacker re-uses code already present in the binary whether in libraries (for return-to-libc attacks for example) or in executable memory. The latter is where ROP differs from return-to-libraries attacks. To some extend ROP can be seen as a generalization/refinement of return-to-libraries attacks.
+
+Return oriented programming is a relatively new technique that evades most code injection defenses such as W$\oplus$X. Most recent malwares use ROP to bypass those defenses and deliver their payload. It is important to note that ROP is not flawless, the scientific community has already found counter measures and is still working on preventing such attacks. (++ SEARCH FOR RELATED PAPERS). The technique consists of aggregating malicious computation by linking together short code snippets called \textit{gadgets} already present in the program's address space (similary to how return-to-libc attacks uses pre-written functions in libc).  A \textit{gadget} ends in a ret instruction and is located in a subroutine within the exisiting program and/or shared library code. Chained together, these gadgets allows an attacker who controls the call stack to build and execute his payload. Because the executed code is stored in memory marked executable, the W$\oplus$X defense will not prevent it from running. The following figure shows the call stack state with a ROP attack (taken from here~\cite{bletsch_jump-oriented_2011}).
+
+While this technique appear simple in theory, it is much more complex in practical use. First, finding proper gadgets in the program's address space is no simple task. Once an attacker has found suitable instructions, he has to find a way to properly link them altogether in order to create his payload. All this work was done manually for a time and it is safe to say that it was a lenghty labour. To solve this issue, we saw the appearance of the first return oriented programming compilers such as Q, ROPC, Mona and others... However, none of them are still 
+completely reliable. Actually, most of them are only proof of concepts and do not work in a real-life situations: one will give up on Turing completeness, another would not provide any verification procedure (essential as some gadgets can be semantically incorrect)...
+
+What we are trying to achieve is : ........
+\section{RELATED WORK}
+\lipsum[1]
+
+\section{MOV2ROP}
+\lipsum[1]
+\subsection{Gadget Extraction}
+\lipsum[1]
+\subsection{Payload Treatment}
+\lipsum[1]
+\subsection{Instruction Analysis}
+\lipsum[1]
+\subsection{Gadget chaining}
+\lipsum[1]
+
+\section{RESULTS \& CONCLUSION}
+\lipsum[1]
+\section{FURTHER WORK}
+\lipsum[1]
+
+\section{REFERENCES}
+\begingroup
+\renewcommand{\section}[2]{}
+    \bibliographystyle{acm}
+    \bibliography{references}
+\endgroup
+
+
+\end{document}
