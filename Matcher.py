@@ -416,7 +416,8 @@ def find_chain(payload_insn, mov_gadget_dict, move_mapping):
     """
     gadget_chain = []
 
-    if payload_insn.mnemonic in ['MOV r/m32,r32', 'MOV r/m32,imm32']:
+    if payload_insn.mnemonic in ['MOV r/m32,r32', 'MOV r/m32,imm32',
+                                 'MOV imm32,r32']:
         gadget_chain = solve_chain('memory_write', payload_insn,
                                    mov_gadget_dict, move_mapping)
 
@@ -490,7 +491,7 @@ def print_stack(gadget_chain, payload_insn):
         """ Inserts a placeholder value to be popped by subsequent gadgets """
         label = colored("value to be popped", "cyan")
         value = None
-        if payload_insn.mnemonic == 'MOV r/m32,r32':
+        if payload_insn.mnemonic in ['MOV r/m32,r32', 'MOV imm32,r32']:
             value = _address_filling(payload_insn.dst)
         elif payload_insn.mnemonic in ['MOV r/m32,imm32', 'MOV r32,imm32',
                                        'MOV r32,r/m32']:
