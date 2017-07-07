@@ -4,19 +4,21 @@
 %% Font settings %%
 \usepackage[T1]{fontenc}
 \usepackage{charter}
-
 %% Custom title page %%
 \usepackage[center,small,sc]{titlesec}
-\titleformat{\section}{\normalfont\fontsize{14}{14}\bfseries}{\thesection}{1em}{}
-\titleformat{\subsection}{\normalfont\fontsize{12}{12}\bfseries}{\thesubsection}{1em}{}
+\titleformat{\section}{\normalfont\fontsize{13}{13}\bfseries}{\thesection}{.75em}{}
+\titleformat{\subsection}{\normalfont\fontsize{12}{12}\bfseries}{\thesubsection}{.5em}{}
 
 %% Custom margins %%
-\usepackage[nohead, nomarginpar, margin=.7in, foot=.35in]{geometry}
+\usepackage[nohead, nomarginpar, margin=.6in, foot=.35in]{geometry}
 \setlength{\columnsep}{2em} % set space between two-column format
 \setlength{\parskip}{.25em}
 
 %% BibTeX citation pkg
 \usepackage{cite}
+
+%% Footnotes
+\usepackage{dblfnote}
 
 %% Figures, listings with caption %%
 \usepackage{hyperref}
@@ -53,21 +55,21 @@
 
 %%% DOCUMENT BEGINS %%%
 \begin{document}
-\begin{titlepage}
-  \centering
-  {\scshape\LARGE Vrije Universiteit Amsterdam\par}
-  \vspace{1cm}
-  {\scshape\Large Bachelor Thesis\par}
-  \vspace{1.5cm}
-  {\huge\bfseries <INSERT TITLE>\par}
-  \vspace{2cm}
-  {\Large\itshape Julien Couvy\par}
-  \vfill
-  supervised by\par
-  Herbert Bos \& Cristiano Giuffrida
-  \vfill
-\end{titlepage}
-
+\author{
+        Julien Couvy\\
+        Vrije Universiteit Amsterdam\\
+        \texttt{julien.couvy@gmail.com}
+        \and
+        Herbert Bos\\
+        Vrije Universiteit Amsterdam\\
+        \texttt{herbertb@cs.vu.nl}
+        \and
+        Cristiano Giuffrida\\
+        Vrije Universiteit Amsterdam\\
+        \texttt{giuffrida@cs.vu.nl}
+}
+\title{\Huge Mov2Rop: <Find a title :(>\vspace{.75em}}
+\maketitle
 
 \begin{abstract}
 
@@ -86,7 +88,48 @@
 \end{abstract}
 
 \section{INTRODUCTION}
-\lipsum[1-2]
+
+The widespread adoption of \textit{Data Execution Prevention (DEP)}, which
+ensures that writable memory regions are non-executable by marking them with a
+special flag, such that an attempt to execute machine code in these regions
+will cause an exception has largely mitigated classic code injections attacks.
+W$\oplus$X was the industry response to code injection exploits, it is deployed
+in virtually all main operating systems: Linux (via PaX patches), OpenBSD,
+Windows (since XP SP2), OS X (since 10.5), Android and so on\ldots. Hardware
+constructors also provided easy support with an extra flag dedicated to the
+marking: Intel "XD" and AMD "WX" to name a few.
+
+DEP techniques and W$\oplus$X largely killed classic code injection attacks.
+However, as one exploit faded another arose. In 1997, Solar Designer presented
+a new approach \textit{return-to-libraries}\cite{solar_returnintolib_1997}
+attacks. Once the control flow of a program was comprised, the attacker would
+use code (functions) already present in shared libraries. No code injection
+were required, thus bypassing the defenses we highlighted. A classic target was
+\textit{libc}\footnote{return-to-lib attacks are often refered as
+return-to-libc for that reason} that contained subroutines for powerful
+system calls that would insure arbitrary code execution. Back then, a
+common perception was that removing dangerous
+\textit{syscalls}\footnote{system() allows to execute any program with the
+current \textit{privileges}} would suffice to stop return-to-libc attacks.
+Besides, with the avenue of Intel's new 64bits x86 processors, the
+subroutines calling convention was changed to require the first argument of
+a function to be passed in a register instead of on the stack. Shared
+libraries developpers also began to restrict or remove library functions
+that performed useful actions for attackers. As a result,
+return-to-libraries attacks were much harder to craft successfully and
+faded away for a time.
+
+At Black Hat USA 08, Roemer et al.\  presented a Turing-complete exploit
+language capable of arbitrary code execution without relying on shared
+libraries. \textit{Return Oriented Programming
+(ROP)}~\cite{roemer_return-oriented_2012} has become the main technique of
+choice for nearly all modern exploits of memory-safety vulnerabilites.
+
+In this paper, we present \textit{Mov2Rop} an attempt at creating a
+pseudo-compiler that translates an exploit of choice into a gadget chain
+for a target binary. In its current state, the only supported architecture is
+Intel x86. \textit{Mov2Rop} will match \textit{mov} instructions with
+corresponding gadgets. 
 
 
 \section{BACKGROUND}
@@ -244,22 +287,47 @@ proof of concepts and do not work in a real-life situations: one will give up
 on Turing completeness, another would not provide any verification procedure
 (essential as some gadgets can be semantically incorrect)...
 
-What we are trying to achieve is : ........
+
 \section{RELATED WORK}
-\lipsum[1]
+\begin{itemize}
+    \item Defense mechanisms (CFI, Shadowstacks ?)
+    \item Other compilers (Pshape, optirop...)
+    \item New kind of ROP attacks (signal, call, jump oriented prog)
+\end{itemize}
 
 \section{MOV2ROP}
-\lipsum[1]
+\begin{itemize}
+    \item General idea of the tool and purpose of each module
+\end{itemize}
+
 \subsection{Gadget Extraction}
-\lipsum[1]
+\begin{itemize}
+    \item Gadget extracting tools (ropper and others)
+    \item Observations on gadget lists found
+\end{itemize}
+
 \subsection{Payload Treatment}
-\lipsum[1]
+\begin{itemize}
+    \item introducing Capstone framework
+    \item how are instructions "tokenized"
+\end{itemize}
 \subsection{Instruction Analysis}
-\lipsum[1]
+\begin{itemize}
+    \item What rules are applied to each gadget and why
+\end{itemize}
 \subsection{Gadget chaining}
-\lipsum[1]
+\begin{itemize}
+    \item How the chaining algorithm works (+ pseudo code or/ flowchart ?)
+    \item Example (in appendix?) or explained here
+\end{itemize}
 \subsection{Limitations}
-\lipsum[1]
+\begin{itemize}
+    \item Description of the tool's limitations, discussion of their impact and
+        how/if they should be handled ?
+    \item (ex: target architecture, input language, liveness, etc...)
+\end{itemize}
+
+
 
   
 \section{RESULTS \& CONCLUSION}
@@ -275,7 +343,14 @@ What we are trying to achieve is : ........
   work making ROP attacks an even bigger threat.
 
 \section{FURTHER WORK}
-\lipsum[1]
+\begin{itemize}
+    \item How to improve our tool
+    \item LLVM migration ?
+    \item extending supported instructions
+    \item payload generator from the gadget chain
+    \item side-effect management
+\end{itemize}
+
 
 \section{REFERENCES}
 \begingroup
