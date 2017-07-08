@@ -121,7 +121,7 @@ faded away for a time.
 At Black Hat USA 08, Roemer et al.\  presented a Turing-complete exploit
 language capable of arbitrary code execution without relying on shared
 libraries. \textit{Return Oriented Programming
-(ROP)}~\cite{roemer_return-oriented_2012} has become the main technique of
+(ROP)}~\cite{roemer_return-oriented_2012} has now become the main technique of
 choice for nearly all modern exploits of memory-safety vulnerabilites.
 
 In this paper, we present \textit{Mov2Rop} an attempt at creating a ROP
@@ -159,22 +159,21 @@ violation.
 
 \textbf{\textit{Data segment:}} it is split in two part
 \begin{itemize}
-\item initializated data, simply called data segment
-\item uninitialized data, also known as the BSS segment.
+\item Initializated data, simply called data segment
+\item Uninitialized data, also known as the bss segment
 \end{itemize}
     The data segment contains the global variables and static variables
 which have a pre-defined value and can be modified. The BSS segment contains
 all global variables and static variables that are initialized to zero or do
 not have explicit initialization in source code.
 
-\bigskip
-\begin{lstlisting}[caption=Variable location in memory,language=C] 
+\begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Variable
+location in memory,language=C] 
 // this static variable is stored in the BSS segment
 static int bss_variable;
 // this global variable is in the DATA segment
 int data_variable = 42; 
 \end{lstlisting}
-\medskip
 
 \textbf{\textit{Heap segment:}} it is the region where dynamic memory allocation
 takes place. The heap area commonly begins at the end of the .bss and .data
@@ -189,47 +188,116 @@ the top of the stack. In addition to the stack pointer, a frame or local base
 pointer is also present which points to a fixed location within a frame. Its
 size is dynamically adjusted by the kernel at run time.
 
-Every processor \textit{Instruction Set Architecture (ISA)} integrates instructions
-to PUSH and POP values onto/off the stack. The stack consists of logical stack
-frames that are pushed when calling a function and popped when returning. A
-stack frame contains the parameters to a function, its local variables, and the
-data necessary to recover the previous stack frame, including the value of the
-instruction pointer at the time of the function call. Depending on its
-implementation the stack will grow up or down. In the rest of this paper, we
-will consider that the stack grows downwards to reproduce the behavior of Intel
-processors.
+Every processor \textit{Instruction Set Architecture (ISA)} integrates
+instructions to PUSH and POP values onto/off the stack. The stack consists of
+logical stack frames that are pushed when calling a function and popped when
+returning. A stack frame contains the parameters to a function, its local
+variables, and the data necessary to recover the previous stack frame,
+including the value of the instruction pointer at the time of the function
+call. Depending on its implementation the stack will grow up or down. In the
+rest of this paper, we will consider that the stack grows downwards to
+reproduce the behavior of Intel processors.
 
-\subsection{Stack-based Overflows}
+\subsection{Buffer Overflows}
 
-Low level languages directly compiled to
-machine code such as C/C++ offer wider possibilites of implementation without
-the cost of speed. However this freedom has a price, programs written in these
-languages make use of powerful instructions that can easily backfire on the
-user if used improperly. Such programs are known to be vulnera- ble to numerous
-attacks diverting the control flow during the execution of the program.  A
-buffer overflow attack is an anomaly where a program, while writing data to a
-buffer, overruns the buffer’s boundary and overwrites adjacent memory
-locations. In other words, a buffer overflow con- dition exists when a program
-attempts to put more data in a buffer than it can hold or when a program
-attempts to put data in a memory area past a buffer.Overflows can be used to
-modify return address or code pointers in order to execute a malicious piece of
-code, sometimes already exisiting within the program’s space or injected by the
-attacker.  ~\cite{one_stacksmashing_1996} relies on two factors:
+Low level languages directly compiled to machine code such as C/C++ offer wide
+possibilites of implementation without the cost of speed. However, this level
+of freedom over memory management increase the risk of errors from programmers.
+Indeed, many powerful instructions can easily be exploited if used improperly.
+Numerous attacks aim at diverting the control flow during the execution of a
+program. Buffer overflows still plague many programs and are a main research
+topic in computer
+security~\cite{DBLP:journals/iee/MouzaraniSZ16,DBLP:journals/iee/PadmanabhuniT16,DBLP:conf/ant/LeonB16}.
 
-Low level language's liberal approach to memory handling (mostly C back in that
-time) Unix filesystem permissions (other OSes were also vulnerable) With
-cautious manipulations, an attacker could grant himself unrestricted priviledge
-to unpriviledged account or user. To explain the functionning of this attack we
-will begin by an example of a typical stack behavior.
+\lstinputlisting[belowcaptionskip=0pt,float=h,language=C,firstline=5,label=lst_overflow,caption=Buffer
+overflow vulnerability]{./snippets/simple_overflow.c}
 
-When invoking or exiting a standard C function, the procedure prolog or epilog
-must be called, this involves saving the previous variables and allocating
-space for the new variables; and vice-versa when the function exits. The
-previous FP is pushed, a new FP is created and SP operates with respect to its
-new local variables.
+A \textit{buffer overflow} attack is an anomaly where a
+program, while writing data to a buffer, overruns the buffer's boundary and
+overwrites adjacent memory locations. In other words, a buffer overflow condition exists when a program attempts to put more data in a buffer than it can
+hold or when a program attempts to put data in a memory area past a
+buffer. Overflows can be used to modify return address or code pointers in order
+to execute a malicious piece of code, sometimes already exisiting within the
+program's space or injected by the attacker. In resume, buffer overflows rely
+on two principal fators: 
 
-Using the below code as an example depicts a straightforward
-situation:
+\begin{itemize}
+    \item Low level language's liberal approach to memory handling
+    \item Exploiting the filesystem permission
+\end{itemize}
+
+With cautious manipulations, an attacker could grant himself unrestricted
+priviledge to unpriviledged account or user.
+
+\textbf{\textit{Example:}} stack buffer overflow~\cite{one_stacksmashing_1996}. When invoking or exiting a standard C function,
+the procedure prolog or epilog must be called, this involves saving the
+previous variables and allocating space for the new variables; and vice-versa
+when the function exits. The previous FP is pushed, a new FP is created and SP
+operates with respect to its new local variables.
+
+The instruction found at $@0x08048530$ gives the allocated size of the buffer
+100 bytes in hexadecimal. We also located exec\_shell at address $0x80484fb$. Here is the
+state of the stack at this point:To overwrite the return address with the one
+of exec\_shell we need to fill the buffer with $0x6c$ bytes, overwrite SFP with a
+fake value and then the target address. This is the state of the stack after
+our payload:
+
+\begin{lstlisting}
+| <argument>                 |
+| <return address>           |
+| <old %ebp>                 | <= %ebp
+| <0x6c bytes of             |
+|       ...                  |
+|       buffer>              |
+| <argument>                 |
+| <address of buffer>        | <= %esp
+           BEFORE
+
+| <0x80484fb <exec_shell>    |
+| 0x42424242 <fake old %ebp> | "BBBB" in hex
+| 0x41414141 ...             | "AAAA" in hex
+|   ... (0x6c bytes of 'A's) |
+|   ... 0x41414141           |
+           AFTER
+\end{lstlisting}
+
+\textbf{\textit{Procedure:}} in the following example(\ref{lst_overflow})
+the vulnerability comes from a wrong use of \textit{strcpy()}. The target
+information are the size of the buffer and the address of
+\textit{exec\_shell()}. The
+former will help us overflow the buffer without going too far leading to a
+segmentation fault while the latter is the address we want to return to. Any disassembler tool like \textit{gdb} can give us the
+information we need to perform the overflow and spawn a shell.
+
+\begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Gdb
+output on simple\_overflow.c]
+$ gdb -q simple_overflow
+(...)
+(gdb) disas vuln_func
+Dump of assembler code for function vuln_func:
+   0x08048524 <+0>:	push   %ebp
+   0x08048525 <+1>:	mov    %esp,%ebp
+   0x08048527 <+3>:	sub    $0x78,%esp
+   0x0804852a <+6>:	sub    $0x8,%esp
+   0x0804852d <+9>:	pushl  0x8(%ebp)
+   0x08048530 <+12>:	lea    -0x6c(%ebp),%eax
+   0x08048533 <+15>:	push   %eax
+   0x08048534 <+16>:	call   0x80483a0 <strcpy@plt>
+   0x08048539 <+21>:	add    $0x10,%esp
+(...)
+(gdb) print exec_shell
+$1 = (...) 0x80484fb <exec_shell>
+\end{lstlisting}
+
+\begin{lstlisting}[float=ht]
+$ ./simple_overflow "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xfb\x84\x04\x08"')"
+Spawning a shell !
+sh-4.4$
+\end{lstlisting}
+
+In practice, once the return address is overwritten, the attacker can perform his exploit via a \textit{code
+injection} assuming no defenses are in place, \textit{return-to-libraries}
+attack, or \textit{return oriented programming} attack.
 
 \subsection{Return Oriented Programming}
 In this section we will introduce the concept of Return Oriented Programming
@@ -267,9 +335,7 @@ functions in libc).  A \textit{gadget} ends in a ret instruction and is located
 in a subroutine within the exisiting program and/or shared library code.
 Chained together, these gadgets allows an attacker who controls the call stack
 to build and execute his payload. Because the executed code is stored in memory
-marked executable, the W$\oplus$X defense will not prevent it from running. The
-following figure shows the call stack state with a ROP attack (taken from
-here~\cite{bletsch_jump-oriented_2011}).
+marked executable, the W$\oplus$X defense will not prevent it from running.
 
 While this technique appear simple in theory, it is much more complex in
 practical use. First, finding proper gadgets in the program's address space is
@@ -351,8 +417,8 @@ on Turing completeness, another would not provide any verification procedure
 \section{REFERENCES}
 \begingroup
 \renewcommand{\section}[2]{}
-\bibliographystyle{acm}
-\bibliography{references}
+\bibliographystyle{ieeetr}
+\small\bibliography{references}
 \endgroup
 
 \appendix
