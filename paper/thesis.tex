@@ -94,7 +94,7 @@ special flag, such that an attempt to execute machine code in these regions
 will cause an exception has largely mitigated classic code injections attacks.
 W$\oplus$X was the industry response to code injection exploits, it is deployed
 in virtually all main operating systems: Linux (via PaX patches), OpenBSD,
-Windows (since XP SP2), OS X (since 10.5), Android and so on\ldots. Hardware
+Windows (since XP SP2), OS X (since 10.5), Android and so on\ldots Hardware
 constructors also provided easy support with an extra flag dedicated to the
 marking: Intel "XD" and AMD "WX" to name a few.
 
@@ -121,15 +121,15 @@ faded away for a time.
 At Black Hat USA 08, Roemer et al.\  presented a Turing-complete exploit
 language capable of arbitrary code execution without relying on shared
 libraries. \textit{Return Oriented Programming
-(ROP)}~\cite{roemer_return-oriented_2012} has now become the main technique of
+(ROP)}\cite{roemer_return-oriented_2012} has now become the main technique of
 choice for nearly all modern exploits of memory-safety vulnerabilites.
 
 In this paper, we present \textit{Mov2Rop} an attempt at creating a ROP
 pseudo-compiler that translates an exploit of choice into a gadget chain for a
 target binary. In its current state, the only supported architecture is Intel
 x86. One of our motivations was to make use of Domas' single instruction
-compiler \textit{movfuscator}~\cite{domas_movfuscator} based on the observation
-that mov instructions are Turing complete~\cite{dolan_mov_2013}. Using
+compiler \textit{movfuscator}\cite{domas_movfuscator} based on the observation
+that mov instructions are Turing complete\cite{dolan_mov_2013}. Using
 movfuscator, we only have to find gadget chains for mov instructions greatly
 reducing the complexity of our tool while keeping, in theory, the ability to
 compile any exploit in to its ROP equivalent.
@@ -175,21 +175,22 @@ static int bss_variable;
 int data_variable = 42; 
 \end{lstlisting}
 
-\textbf{\textit{Heap segment:}} it is the region where dynamic memory allocation
-takes place. The heap area commonly begins at the end of the .bss and .data
-segments and grows to larger addresses from there.
+\textbf{\textit{Heap segment:}} it is the region where dynamic memory
+allocation takes place. The heap area commonly begins at the end of the
+\texttt{.bss} and \texttt{.data} segments and grows to larger addresses from
+there.
 
 \textit{\textbf{Stack segment:}} a stack is a contiguous block of memory
 containing data. It is a \textit{Last In First Out} data structure, which means
 literally that the latest value stored on the stack will be the first to be
 removed, commonly used
-in computers. A register called the \textit{stack pointer}) points to
+in computers. A register called the \textit{stack pointer} points to
 the top of the stack. In addition to the stack pointer, a frame or local base
 pointer is also present which points to a fixed location within a frame. Its
 size is dynamically adjusted by the kernel at run time.
 
 Every processor \textit{Instruction Set Architecture (ISA)} integrates
-instructions to PUSH and POP values onto/off the stack. The stack consists of
+instructions to \texttt{push} and \texttt{pop} values onto/off the stack. The stack consists of
 logical stack frames that are pushed when calling a function and popped when
 returning. A stack frame contains the parameters to a function, its local
 variables, and the data necessary to recover the previous stack frame,
@@ -202,14 +203,14 @@ reproduce the behavior of Intel processors.
 
 Low level languages directly compiled to machine code such as C/C++ offer wide
 possibilites of implementation without the cost of speed. However, this level
-of freedom over memory management increase the risk of errors from programmers.
+of freedom over memory management increases the risk of errors from programmers.
 Indeed, many powerful instructions can easily be exploited if used improperly.
 Numerous attacks aim at diverting the control flow during the execution of a
 program. Buffer overflows still plague many programs and are a main research
 topic in computer
-security~\cite{DBLP:journals/iee/MouzaraniSZ16,DBLP:journals/iee/PadmanabhuniT16,DBLP:conf/ant/LeonB16}.
+security\cite{DBLP:journals/iee/MouzaraniSZ16,DBLP:journals/iee/PadmanabhuniT16,DBLP:conf/ant/LeonB16}.
 
-\lstinputlisting[belowcaptionskip=0pt,float=h,language=C,firstline=5,label=lst_overflow,caption=Buffer
+\lstinputlisting[aboveskip=\medskipamount,belowcaptionskip=0pt,float=h,language=C,firstline=5,label=lst_overflow,caption=Buffer
 overflow vulnerability]{./snippets/simple_overflow.c}
 
 A \textit{buffer overflow} attack is an anomaly where a
@@ -229,13 +230,14 @@ on two principal fators:
 With cautious manipulations, an attacker could grant himself unrestricted
 priviledge to unpriviledged account or user.
 
-\textbf{\textit{Example:}} \textit{stack buffer overflow}~\cite{one_stacksmashing_1996}. When invoking or exiting a standard C function,
-the procedure prolog or epilog must be called, this involves saving the
-previous variables and allocating space for the new variables; and vice-versa
-when the function exits. The previous FP is pushed, a new FP is created and SP
-operates with respect to its new local variables.
+\textbf{\textit{Example:}} \textit{stack-based buffer
+overflow}\cite{one_stacksmashing_1996}. When invoking or exiting a standard C
+function, the procedure prolog or epilog must be called, this involves saving
+the previous variables and allocating space for the new variables; and
+vice-versa when the function exits. The previous FP is pushed, a new FP is
+created and SP operates with respect to its new local variables.
 
-\textbf{\textit{Procedure:}} in the following example(\ref{lst_overflow})
+\textbf{\textit{Procedure:}} in the following \autoref{lst_overflow},
 the vulnerability comes from a wrong use of \textit{strcpy()}. The target
 information are the size of the buffer and the address of
 \textit{exec\_shell()}. The
@@ -264,7 +266,7 @@ $1 = (...) 0x80484fb <exec_shell>
 \end{lstlisting}
 
 To overwrite the return address with the one
-of exec\_shell we need to fill the buffer with $100$ bytes, overwrite
+of \textit{exec\_shell()} we need to fill the buffer with $100$ bytes, overwrite
 SFP\footnote{the saved frame pointer (old content of \%ebp) is called SFP} with a
 dummy value and then the target address.
 
@@ -288,7 +290,7 @@ dummy value and then the target address.
 \end{lstlisting}
 
 
-\begin{lstlisting}[float]
+\begin{lstlisting}[float=h]
 $ ./simple_overflow "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xfb\x84\x04\x08"')"
 Spawning a shell !
 sh-4.4$
@@ -299,57 +301,66 @@ injection} assuming no defenses are in place, \textit{return-to-libraries}
 attack, or \textit{return oriented programming} attack.
 
 \subsection{Return Oriented Programming}
-In this section we will introduce the concept of Return Oriented Programming
-(ROP)~\cite{roemer_return-oriented_2012}. Traditionnally code injection attacks
-relies on diverting the normal control flow of a program and introduce
-arbitrary, usually malicious, behavior. The principal attack vector for
-injections is a stack buffer overflow, though many other alternatives were
-invented such as buffer overflows on the heap, integer overflows... To achieve
-his goal, the attacker must (1) subvert the program's control flow from its
-normal course, and (2) redirect the program's execution. In traditional
-stack-smashing attacks, an attacker completes the first task by overwriting a
-return address on the stack, so that it points to code of his choosing, the
-\textit{shellcode}, rather than to the function that made the call. However,
-this kind of attacks was discovered a long time ago and multiple defenses were
-set up against them: (W+X, DEP...)
+In this section we will introduce the concepts behind \textit{return-oriented programming
+}\cite{roemer_return-oriented_2012}.
 
-Return oriented programming shares the same ideas than return-to-libraries
-attacks. An attacker who managed to redirect the program's control flow can
-force it to execute a payload without introducing any new code; there are no
-code injections at all. Instead, the attacker re-uses code already present in
-the binary whether in libraries (for return-to-libc attacks for example) or in
-executable memory. The latter is where ROP differs from return-to-libraries
-attacks. To some extend ROP can be seen as a generalization/refinement of
-return-to-libraries attacks.
+Return-oriented programming is a technique by which an attacker can induce
+arbitrary behavior in a program whose control flow he has diverted, without
+injecting any code. It was built to overcome buffer exploit defense
+mechanisms like ASLR, DEP or W$\oplus$X. The technique consists of aggregating
+malicious computation by linking together short code snippets called
+\textit{gadgets}.  A \textit{gadget} ends in a \texttt{ret} instruction and is
+located in a subroutine within the program's address space. Chained together,
+these gadgets allows an attacker who controls the call stack to build and
+execute his payload. Because the executed code is stored in memory marked
+executable, the W$\oplus$X defense will not prevent it from running.
 
-Return oriented programming is a relatively new technique that evades most code
-injection defenses such as W$\oplus$X. Most recent malwares use ROP to bypass
-those defenses and deliver their payload. It is important to note that ROP is
-not flawless, the scientific community has already found counter measures and
-is still working on preventing such attacks. (++ SEARCH FOR RELATED PAPERS).
-The technique consists of aggregating malicious computation by linking together
-short code snippets called \textit{gadgets} already present in the program's
-address space (similary to how return-to-libc attacks uses pre-written
-functions in libc).  A \textit{gadget} ends in a ret instruction and is located
-in a subroutine within the exisiting program and/or shared library code.
-Chained together, these gadgets allows an attacker who controls the call stack
-to build and execute his payload. Because the executed code is stored in memory
-marked executable, the W$\oplus$X defense will not prevent it from running.
+ROP can be seen as a generalization of traditional return-into-lib attacks. But
+the threat is more general. In theory, ROP can be used to make Turing complete
+attacks. However, in practice, it requires a really complex work and very
+little research concluded to a satisfying automated method of crafting Turing complete
+exploits.
 
-While this technique appear simple in theory, it is much more complex in
-practical use. First, finding proper gadgets in the program's address space is
-no simple task. Once an attacker has found suitable instructions, he has to
-find a way to properly link them altogether in order to create his payload. All
-this work was done manually for a time and it is safe to say that it was a
-lenghty labour. To solve this issue, we saw the appearance of the first return
-oriented programming compilers such as Q, ROPC, Mona and others... However,
-none of them are still completely reliable. Actually, most of them are only
-proof of concepts and do not work in a real-life situations: one will give up
-on Turing completeness, another would not provide any verification procedure
-(essential as some gadgets can be semantically incorrect)...
+\textbf{\textit{Example:}} see \autoref{lst_ropchain}. We are trying to build a
+rop-chain to concatenate \texttt{"/bin/sh"} in a buffer and spawn a shell. In
+order to pass the tests in each functions we need \texttt{pop; ret;} gadgets
+and prepare the stack with the required values. We supposedly found a memory
+vulnerability that allows us to perform a stack-buffer overflow in the same
+conditions as the last example. The return address is overwritten with the
+address of the first gadget in our chain.
+
+\lstinputlisting[aboveskip=\medskipamount,belowcaptionskip=0pt,float=h,language=C,firstline=31,lastline=53,label=lst_ropchain,caption=ROP
+exploit example]{./snippets/chaining_func.c}
+
+\textbf{\textit{Stack preparation:}} lookin
+
+
+
+
+When the \textit{instruction pointer} points at the address of
+\texttt{add\_bin()},
+
+\begin{lstlisting}[float,aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack
+prepared with a ROP chain]
+| <address of exec_command()> |
+| 0xcafebabe <key1>           |
+| 0x8badfood <key2>           |
+| <address of POP; POP; RET>  |
+| <address of add_sh()>       |
+| 0xdeadbeef <key>            | <argument>
+| <address of POP; RET>       | <return addr>
+| <address of add_bin()>      | <function call>
+| 0x42424242 <fake old %ebp>  |
+| 0x41414141 ...              |
+|   ... (0x6c bytes of 'A's)  |
+|   ... 0x41414141            | 0x41414141 == "AAAA"
+\end{lstlisting}
 
 
 \section{RELATED WORK}
+It is important to note that ROP is
+not flawless, the scientific community has already found counter measures and
+is still working on preventing such attacks. (++ SEARCH FOR RELATED PAPERS).
 \begin{itemize}
     \item Defense mechanisms (CFI, Shadowstacks ?)
     \item Other compilers (Pshape, optirop...)
@@ -452,5 +463,7 @@ on Turing completeness, another would not provide any verification procedure
   \label{result-hanoi}
   \caption{Statistics on hanoi\_towers.c}
 \end{table}
+
+\lstinputlisting[float,label=lst_ropexploit,caption=ROP exploit in Python,language=Python]{./snippets/rop_chain.py}
 
 \end{document}
