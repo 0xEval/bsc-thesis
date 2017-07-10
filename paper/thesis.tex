@@ -265,10 +265,10 @@ Dump of assembler code for function vuln_func:
 $1 = (...) 0x80484fb <exec_shell>
 \end{lstlisting}
 
-To overwrite the return address with the one
-of \textit{exec\_shell()} we need to fill the buffer with $100$ bytes, overwrite
-SFP\footnote{the saved frame pointer (old content of \%ebp) is called SFP} with a
-dummy value and then the target address.
+To overwrite the return address with the one of \textit{exec\_shell()} we need
+to fill the buffer with $100$ bytes, overwrite SFP\footnote{the saved frame
+pointer (old content of \%ebp) is called SFP} with a dummy value and then the
+target address.
 
 \begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack before and after overflow]
 | <argument>                 |
@@ -289,16 +289,16 @@ dummy value and then the target address.
            AFTER
 \end{lstlisting}
 
+In practice, once the return address is overwritten, the attacker can perform
+his exploit via a \textit{code injection} assuming no defenses are in place,
+\textit{return-to-libraries} attack, or \textit{return oriented programming}
+attack.
 
-\begin{lstlisting}[float=h]
+\begin{lstlisting}[float=ht,belowskip=\medskipamount]
 $ ./simple_overflow "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xfb\x84\x04\x08"')"
 Spawning a shell !
 sh-4.4$
 \end{lstlisting}
-
-In practice, once the return address is overwritten, the attacker can perform his exploit via a \textit{code
-injection} assuming no defenses are in place, \textit{return-to-libraries}
-attack, or \textit{return oriented programming} attack.
 
 \subsection{Return Oriented Programming}
 In this section we will introduce the concepts behind \textit{return-oriented programming
@@ -321,24 +321,29 @@ attacks. However, in practice, it requires a really complex work and very
 little research concluded to a satisfying automated method of crafting Turing complete
 exploits.
 
-\textbf{\textit{Example:}} see \autoref{lst_ropchain}. We are trying to build a
-rop-chain to concatenate \texttt{"/bin/sh"} in a buffer and spawn a shell. In
-order to pass the tests in each functions we need \texttt{pop; ret;} gadgets
-and prepare the stack with the required values. We supposedly found a memory
+\textbf{\textit{Example:}} see \autoref{lst_ropchain}. We want to give a
+general understanding on how gadget chaining generaly works. Here, we need to
+concatenate \texttt{"/bin/sh"} in a buffer by chaining functions together and
+finally spawn a shell. Each functions requires specific parameters that we need
+to store on the stack along with the gadget chain.We supposedly found a memory
 vulnerability that allows us to perform a stack-buffer overflow in the same
-conditions as the last example. The return address is overwritten with the
-address of the first gadget in our chain.
+conditions as the last example.
+
+\textbf{\textit{Stack preparation:}} an attacker prepares a fake stack frame to
+look like a collection of new return addresses for control-flow changes. In
+practice, it is a very meticulous process as we will see in a following
+section.
+
+\textbf{\textit{Procedure:}} when the \textit{instruction pointer} points at
+the address of \texttt{add\_bin()}, the return address\footnote{see standard C
+ function calling procedure} is the address of a
+ \texttt{pop; ret;} gadget. The test value is parsed as argument in
+ \texttt{add\_bin()}. The \texttt{pop; ret;} gadget ensures that the next value
+ pointed by \texttt{\%ip} will be the address of the second gadget in the
+ chain. See Appendix \ref{appendix:a} for a written exploit.
 
 \lstinputlisting[aboveskip=\medskipamount,belowcaptionskip=0pt,float=h,language=C,firstline=31,lastline=53,label=lst_ropchain,caption=ROP
 exploit example]{./snippets/chaining_func.c}
-
-\textbf{\textit{Stack preparation:}} lookin
-
-
-
-
-When the \textit{instruction pointer} points at the address of
-\texttt{add\_bin()},
 
 \begin{lstlisting}[float,aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack
 prepared with a ROP chain]
