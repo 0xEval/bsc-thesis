@@ -414,7 +414,7 @@ We use Ropper's engine\cite{sashs_ropper} within the Extractor  module to
 extract gadgets from binaries. Gadgets are searched according to a regular
 expression.
 
-\begin{lstlisting}[float=h,aboveskip=0pt,belowskip=0pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
 $ ropper --file target_bin --search "pop e??; ret;"
 0x080bbf26: pop eax; ret;
 0x08048411: pop ebp; ret;
@@ -430,6 +430,29 @@ Mnemonics are short strings representing the type of instruction. A mnemonic is
 assigned by looking-up in a dictionnary of opcodes. The opcode is extracted
 with regular expressions manipulations on Ropper's output.
 
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+Instruction found at <0x80d5386>
+---------------------------------
+Mnemonic: MOV r32,r/m32
+   Label: mov edi, dword ptr [edx]
+    Dest: edi
+     Src: edx
+\end{lstlisting}
+
+\begin{table*}[t]
+\centering
+\label{tab:opcode}
+\begin{tabular}{l|l|l}
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Description} \\ \hline
+0x89 & MOV r/m32,r32 & Memory write (or register move) with 32 bits reg \\ \hline
+0x8B & MOV r32,r/m32 & Memory read from 32 bits reg \\ \hline
+\begin{tabular}[c]{@{}l@{}}0xB8\\ 0xBB\\ ...\end{tabular} & \multicolumn{1}{c|}{MOV r/m32,imm32} & Memory write from immediate val \\ \hline
+\begin{tabular}[c]{@{}l@{}}0xA1\\ 0x8B1D\\ ...\end{tabular} & MOV r32,imm32 & \begin{tabular}[c]{@{}l@{}}Memory read from immediate val\\ ex: mov eax, ds:0x0\end{tabular} \\ \hline
+0xA3 & MOV imm32,r32 & Memory write from 32bits reg to imm val \\ \hline
+\multicolumn{1}{c|}{...} & \multicolumn{1}{c|}{...} & \multicolumn{1}{c}{...}
+\end{tabular}
+\caption{Opcode Dictionnary}
+\end{table*}
 
 \subsection{Payload Treatment}
 \begin{itemize}
