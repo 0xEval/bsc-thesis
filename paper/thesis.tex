@@ -38,14 +38,17 @@
 
 \lstset{
   basicstyle=\small\ttfamily,
+  commentstyle=\ttfamily,
+  keywordstyle=\bfseries,
   aboveskip=1pt,
   belowskip=1pt,
   frame=single,
   captionpos=b,
+  showstringspaces=false,
   columns=flexible,
-  keepspaces=true,
   linewidth=\columnwidth,
   breaklines=true,
+  keepspaces=true,
   identifierstyle=\ttfamily,
   keywordstyle=\ttfamily\color[rgb]{0,0,1},
   commentstyle=\ttfamily\color[rgb]{0.133,0.545,0.133},
@@ -363,14 +366,39 @@ prepared with a ROP chain]
 
 
 \section{RELATED WORK}
-It is important to note that ROP is
-not flawless, the scientific community has already found counter measures and
-is still working on preventing such attacks. (++ SEARCH FOR RELATED PAPERS).
-\begin{itemize}
-    \item Defense mechanisms (CFI, Shadowstacks ?)
-    \item Other compilers (Pshape, optirop...)
-    \item New kind of ROP attacks (signal, call, jump oriented prog)
-\end{itemize}
+
+\textit{Control flow integrity (CFI)} regroup techniques which prevents malwares
+attacks from redirecting the flow of execution of a program. Many techniques
+were/are being developped to maintain control-flow integrity. However, recent
+research also showed that many of these (dated) defenses can be bypassed.
+
+\textit{Address Space Layout Randomization:} ALSR makes it more difficult for
+an attacker to predict target addresse. It rearranges the address space
+positions of key data areas of a process, including the base of the executable
+and the positions of the stack, heap and libraries.
+
+\textit{ShadowStacks\cite{Sinnadurai_transparentruntime}:} This technique
+mitigates return address overwrites by keeping a record of of the legitimate
+return address for some function call, and then to check that the return
+address is still correct before returning.
+
+\textit{Stack Canaries:} They are used to detect a stack buffer overflow before
+execution of malicious code can occur. Stack canaries work by modifying every
+function's prologue and epilogue regions to place and check a value on the
+stack respectively. As such, if a stack buffer is overwritten during a memory
+copy operation, the error is noticed before execution returns from the copy
+function.
+
+While these techniques improved our defenses against ROP attacks, most of them only
+ complexify the infection vector but do not fix the underlying vulnerability.
+
+\textbf{\textit{ROP Compiler:}} Follner et al.\ presented
+PSHAPE\cite{barthe_pshape:_2016}, a state-of-the-art open source gadget
+chaining tool adapted to realistic scenarios. It offers syntactic and semantic
+gadget search and automatic chaining for 64 bits architectures.  They claim
+being the only one amongst competition to successfully create ROP chains
+automatically in nine out of eleven practical cases.
+
 
 \section{MOV2ROP}
 \begin{itemize}
