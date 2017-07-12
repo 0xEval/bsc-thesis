@@ -401,15 +401,35 @@ automatically in nine out of eleven practical cases.
 
 
 \section{MOV2ROP}
-\begin{itemize}
-    \item General idea of the tool and purpose of each module
-\end{itemize}
+
+In this paper, we are trying to translate a given exploit into a ROP chain for
+a target binary. Our work differ from other compilers as we chose to compiled
+the source code into mov instructions only using an external compiler
+\textit{movfuscator}. Mov2Rop is written in Python and is divided into three
+different modules: the \textit{Extractor}, \textit{Dissassembler}, and
+\textit{Matcher}.
 
 \subsection{Gadget Extraction}
-\begin{itemize}
-    \item Gadget extracting tools (ropper and others)
-    \item Observations on gadget lists found
-\end{itemize}
+We use Ropper's engine\cite{sashs_ropper} within the Extractor  module to
+extract gadgets from binaries. Gadgets are searched according to a regular
+expression.
+
+\begin{lstlisting}[float=h,aboveskip=0pt,belowskip=0pt]
+$ ropper --file target_bin --search "pop e??; ret;"
+0x080bbf26: pop eax; ret;
+0x08048411: pop ebp; ret;
+0x080481d1: pop ebx; ret;
+...
+\end{lstlisting}
+
+The output is then parsed by our program to create a list of \textit{Gadget}
+objects. Gadgets are defined by a list of \textit{Instruction} objects and the
+address of its first instruction. We define an Instruction by a label, an
+address, a mnemonic, a source and a destination (without optional offsets).
+Mnemonics are short strings representing the type of instruction. A mnemonic is
+assigned by looking-up in a dictionnary of opcodes. The opcode is extracted
+with regular expressions manipulations on Ropper's output.
+
 
 \subsection{Payload Treatment}
 \begin{itemize}
@@ -438,7 +458,7 @@ automatically in nine out of eleven practical cases.
 \section{RESULTS \& CONCLUSION}
   We tested our tool on two sample programs written in C. For each case, the
   target binary is the program compiled with a static version of \textit{glibc}
-  (see \ref{appendix:a}Appendix).
+  (see Appendix \ref{appendix:a}).
   We demonstrated a simple yet powerful way to craft return oriented payloads
   which are still to this day a strong attack vector. By exploiting the Turing
   completeness of mov instructions coupled with a mov-compiler, we greatly
