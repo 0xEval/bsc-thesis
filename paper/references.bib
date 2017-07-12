@@ -1,22 +1,21 @@
+@misc{one_stacksmashing_1996,
+    author = {AlephOne},
+    title = {Smashing The Stack For Fun And Profit},
+    year = {November 08, 1996},
+    howpublished = "\url{http://insecure.org/stf/smashstack.html}"
+}
+
 @misc{smith_stacksmashing_1997,
     author = {Nathan P. Smith},
     title = {Stack smashing vulnerabilities in the UNIX operating system},
     year = {1997}
 }
-@article{ouyang_advanced_2015,
-	title = {An advanced automatic construction method of {ROP}},
-	volume = {20},
-	issn = {1007-1202, 1993-4998},
-	url = {http://link.springer.com/10.1007/s11859-015-1069-x},
-	doi = {10.1007/s11859-015-1069-x},
-	language = {en},
-	number = {2},
-	urldate = {2017-04-06},
-	journal = {Wuhan University Journal of Natural Sciences},
-	author = {Ouyang, Yongji and Wang, Qingxian and Peng, Jianshan and Zeng, Jie},
-	month = apr,
-	year = {2015},
-	pages = {119--128}
+
+@misc{solar_returnintolib_1997,
+    author = {SolarDesigner},
+    title = {Return-into-lib(c) exploits},
+    year = {August 10, 1997},
+    howpublished = "\url{http://seclists.org/bugtraq/1997/Aug/63}"
 }
 
 @article{roemer_return-oriented_2012,
@@ -36,17 +35,28 @@
 	pages = {1--34}
 }
 
-@inproceedings{bosman_framing_2014,
-	title = {Framing {Signals} - {A} {Return} to {Portable} {Shellcode}},
-	isbn = {978-1-4799-4686-0},
-	url = {http://ieeexplore.ieee.org/document/6956568/},
-	doi = {10.1109/SP.2014.23},
+@misc{dolan_mov_2013,
+    author = {Stephen Dolan},
+    title = {mov is Turing-complete},
+    year = {July 19, 2013},
+    howpublished = "\url{http://www.cl.cam.ac.uk/~sd601/papers/mov.pdfA}"
+}
+
+
+@article{ouyang_advanced_2015,
+	title = {An advanced automatic construction method of {ROP}},
+	volume = {20},
+	issn = {1007-1202, 1993-4998},
+	url = {http://link.springer.com/10.1007/s11859-015-1069-x},
+	doi = {10.1007/s11859-015-1069-x},
+	language = {en},
+	number = {2},
 	urldate = {2017-04-06},
-	publisher = {IEEE},
-	author = {Bosman, Erik and Bos, Herbert},
-	month = may,
-	year = {2014},
-	pages = {243--258}
+	journal = {Wuhan University Journal of Natural Sciences},
+	author = {Ouyang, Yongji and Wang, Qingxian and Peng, Jianshan and Zeng, Jie},
+	month = apr,
+	year = {2015},
+	pages = {119--128}
 }
 
 @misc{mulder_subject_2016,
@@ -57,56 +67,6 @@
 	year = {2016}
 }
 
-@misc{cormack_building_2015,
-	title = {Building an {LLVM} {Backend}},
-	url = {http://www.inf.ed.ac.uk/teaching/courses/ct/other/LLVMBackend-2015-03-26_v2.pdf},
-	author = {Cormack, Fraser and Saulais, Pierre-André},
-	month = mar,
-	year = {2015}
-}
-
-@misc{sampson_llvm_2015,
-	type = {Blog},
-	title = {{LLVM} {For} {Grad} students},
-	url = {https://www.cs.cornell.edu/~asampson/blog/llvm.html},
-	language = {en},
-	author = {Sampson, Adrian},
-	month = aug,
-	year = {2015}
-}
-
-@incollection{lattner_llvm_2012,
-	title = {{LLVM}},
-	isbn = {978-1-105-57181-7},
-	url = {http://www.aosabook.org/en/llvm.html},
-	language = {eng},
-	booktitle = {The {Architecture} of {Open} {Source} {Application}},
-	author = {Lattner, Chris},
-	month = jul,
-	year = {2012}
-}
-
-@book{chung-shu_creating_2016,
-	title = {Creating an {LLVM} {Backend} for the {Cpu}0 {Architecture}},
-	url = {https://jonathan2251.github.io/lbd/about.html},
-	language = {eng, chinese},
-	author = {Chung-Shu, Chen and Jamshidi, Anoushe},
-	month = nov,
-	year = {2016}
-}
-
-@misc{pa_kt_ropc_nodate,
-	title = {{ROPC}},
-	shorttitle = {https://github.com/pakt/ropc},
-	url = {https://github.com/pakt/ropc},
-	publisher = {GitHub},
-	author = {pa\_kt}
-}
-
-@misc{noauthor_writing_nodate,
-	title = {Writing an {LLVM} {Backend}},
-	url = {http://llvm.org/docs/WritingAnLLVMBackend.html}
-}
 
 @incollection{barthe_pshape:_2016,
 	address = {Cham},
@@ -125,10 +85,6 @@
 	pages = {212--228}
 }
 
-@misc{noauthor_pshape:_nodate,
-	title = {{PSHAPE}: {Practical} {Support} for {Half}-{Automated} {Program} {Exploitation}},
-	url = {https://sites.google.com/site/exploitdevpshape/}
-}
 
 @misc{nguyen_optirop:_2013,
 	address = {Blackhat USA},
@@ -140,23 +96,73 @@
 	year = {2013}
 }
 
-@misc{lattner_llvm_2008,
-	title = {{LLVM} {Bitcode} {File} {Format}},
-	url = {http://web.cs.ucla.edu/classes/spring08/cs259/llvm-2.2/docs/BitCodeFormat.html#bitstream},
-	author = {Lattner, Chris and Haberman, Joshua},
-	year = {2008}
+
+@article{DBLP:journals/iee/MouzaraniSZ16,
+  author    = {Maryam Mouzarani and
+               Babak Sadeghiyan and
+               Mohammad Zolfaghari},
+  title     = {Smart fuzzing method for detecting stack-based buffer overflow in
+               binary codes},
+  journal   = {{IET} Software},
+  volume    = {10},
+  number    = {4},
+  pages     = {96--107},
+  year      = {2016},
+  url       = {https://doi.org/10.1049/iet-sen.2015.0039},
+  doi       = {10.1049/iet-sen.2015.0039},
+  timestamp = {Sun, 28 May 2017 13:23:51 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/journals/iee/MouzaraniSZ16},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
 }
 
-@inproceedings{bletsch_jump-oriented_2011,
-	title = {Jump-oriented programming: a new class of code-reuse attack},
-	isbn = {978-1-4503-0564-8},
-	shorttitle = {Jump-oriented programming},
-	url = {http://portal.acm.org/citation.cfm?doid=1966913.1966919},
-	doi = {10.1145/1966913.1966919},
-	language = {en},
-	urldate = {2017-04-15},
-	publisher = {ACM Press},
-	author = {Bletsch, Tyler and Jiang, Xuxian and Freeh, Vince W. and Liang, Zhenkai},
-	year = {2011},
-	pages = {30}
+
+@article{DBLP:journals/iee/PadmanabhuniT16,
+  author    = {Bindu Madhavi Padmanabhuni and
+               Hee Beng Kuan Tan},
+  title     = {Auditing buffer overflow vulnerabilities using hybrid static-dynamic
+               analysis},
+  journal   = {{IET} Software},
+  volume    = {10},
+  number    = {2},
+  pages     = {54--61},
+  year      = {2016},
+  url       = {https://doi.org/10.1049/iet-sen.2014.0185},
+  doi       = {10.1049/iet-sen.2014.0185},
+  timestamp = {Sun, 28 May 2017 13:23:51 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/journals/iee/PadmanabhuniT16},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
+
+@inproceedings{DBLP:conf/ant/LeonB16,
+  author    = {Erick Leon and
+               Stefan D. Bruda},
+  title     = {Counter-Measures against Stack Buffer Overflows in GNU/Linux Operating
+               Systems},
+  booktitle = {The 7th International Conference on Ambient Systems, Networks and
+               Technologies {(ANT} 2016) / The 6th International Conference on Sustainable
+               Energy Information Technology {(SEIT-2016)} / Affiliated Workshops,
+               May 23-26, 2016, Madrid, Spain},
+  pages     = {1301--1306},
+  year      = {2016},
+  crossref  = {DBLP:conf/ant/2016},
+  url       = {https://doi.org/10.1016/j.procs.2016.04.270},
+  doi       = {10.1016/j.procs.2016.04.270},
+  timestamp = {Wed, 24 May 2017 08:30:11 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/conf/ant/LeonB16},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
+
+@misc{sashs_ropper,
+    author = {Sascha Schirra},
+    title = {Ropper},
+    howpublished = "\url{https://github.com/sashs/Ropper}"
+}
+
+
+@misc{domas_movfuscator,
+    author = {Chris Domas},
+    title = {M/o/Vfuscator, the single instruction compiler},
+    howpublished = "\url{http://www.github.com/xoreaxeaxeax/movfuscator}"
 }
