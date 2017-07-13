@@ -4,6 +4,9 @@
 %% Font settings %%
 \usepackage[T1]{fontenc}
 \usepackage{charter}
+\usepackage{algorithm}
+\usepackage[noend]{algorithmic}
+
 %% Custom title page %%
 \usepackage[center,small,sc]{titlesec}
 \titleformat{\section}{\normalfont\fontsize{13}{13}\bfseries}{\thesection}{.75em}{}
@@ -104,7 +107,7 @@ marking: Intel "XD" and AMD "WX" to name a few.
 DEP techniques and W$\oplus$X largely killed classic code injection attacks.
 However, as one exploit faded another arose. In 1997, Solar Designer presented
 a new approach \textit{return-to-libraries}\cite{solar_returnintolib_1997}
-attacks. Once the control flow of a program was comprised, the attacker would
+attacks. Once the control-flow of a program was comprised, the attacker would
 use code (functions) already present in shared libraries. No code injection
 were required, thus bypassing the defenses we highlighted. A classic target was
 \textit{libc}\footnote{return-to-lib attacks are often refered as
@@ -208,7 +211,7 @@ Low level languages directly compiled to machine code such as C/C++ offer wide
 possibilites of implementation without the cost of speed. However, this level
 of freedom over memory management increases the risk of errors from programmers.
 Indeed, many powerful instructions can easily be exploited if used improperly.
-Numerous attacks aim at diverting the control flow during the execution of a
+Numerous attacks aim at diverting the control-flow during the execution of a
 program. Buffer overflows still plague many programs and are a main research
 topic in computer
 security\cite{DBLP:journals/iee/MouzaraniSZ16,DBLP:journals/iee/PadmanabhuniT16,DBLP:conf/ant/LeonB16}.
@@ -308,7 +311,7 @@ In this section we will introduce the concepts behind \textit{return-oriented pr
 }\cite{roemer_return-oriented_2012}.
 
 Return-oriented programming is a technique by which an attacker can induce
-arbitrary behavior in a program whose control flow he has diverted, without
+arbitrary behavior in a program whose control-flow he has diverted, without
 injecting any code. It was built to overcome buffer exploit defense
 mechanisms like ASLR, DEP or W$\oplus$X. The technique consists of aggregating
 malicious computation by linking together short code snippets called
@@ -367,7 +370,7 @@ prepared with a ROP chain]
 
 \section{RELATED WORK}
 
-\textit{Control flow integrity (CFI)} regroup techniques which prevents malwares
+\textit{Control-flow integrity (CFI)\cite{mulder_subject_2016}} regroup techniques which prevents malwares
 attacks from redirecting the flow of execution of a program. Many techniques
 were/are being developped to maintain control-flow integrity. However, recent
 research also showed that many of these (dated) defenses can be bypassed.
@@ -410,6 +413,7 @@ different modules: the \textit{Extractor}, \textit{Dissassembler}, and
 \textit{Matcher}.
 
 \subsection{Gadget Extraction}
+
 We use Ropper's engine\cite{sashs_ropper} within the Extractor  module to
 extract gadgets from binaries. Gadgets are searched according to a regular
 expression.
@@ -455,15 +459,115 @@ Mnemonic: MOV r32,r/m32
 \end{table*}
 
 \subsection{Payload Treatment}
-\begin{itemize}
-    \item introducing Capstone framework
-    \item how are instructions "tokenized"
-\end{itemize}
+
+The source code that we want to translate is firstly compiled to an object file
+in Intel syntax using \textit{movfuscator}.  We use
+Capstone\cite{quynh_capstone}, a multi architecture dissassembly framework to
+analyze each instruction. The Dissassembler module searches for all
+\texttt{mov} and creates Instructions objects similarly to Extractor. When
+created, an Instruction is assigned a mnemonic reference if the dictionnary
+lookup was succesful, otherwise it's simply refered as not supported.
+
 \subsection{Instruction Analysis}
-\begin{itemize}
-    \item What rules are applied to each gadget and why
-\end{itemize}
+
+The Matcher module will create lists containting each type of gadgets. We
+divide them in three categories: memory read, memory writes, and register
+moves. The output of the Extractor module is analyzed using an expandable set
+of rules.
+
+\textit{No action on \texttt{esp}}: because of the nature of ROP, we cannot
+modify \texttt{esp} at any point in time as it would neutralize our stack
+preparation and thus the payload's execution.
+
+\textit{Restricted instrutions:} certain instructions like \texttt{call} or
+\texttt{leave} introduce jumps at undetermined addresses.
+
+\textit{Conflict prevention:} we try to prevent conflicts between instructions when the
+gadget is longer than $2$. No intermediary instruction can affect the
+\texttt{\%dest} register to ensure the desired effect.
+
+
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+X write on ESP
+Gadget <0x80a1de3>: g1: mov dword ptr [eax], edx
+                    g2: add esp, 8
+                    g3: pop ebx
+                    g4: ret;
+
+X conflicting instructions
+Gadget <0x807af78>: g1: mov eax, dword ptr [eax]
+                    g2: sub eax, dword ptr [edx]
+                    g3: ret;
+
+
+\end{lstlisting}
+
+We observed that chains can be found even with these limitations, while fixing
+them would require a delicate stack preparation.
+
+
+
 \subsection{Gadget chaining}
+
+The Matcher module is also in charge of chaining gadgets together mapping to
+the desired payload instruction. 
+
+\begin{algorithm}
+    \caption{IsMovable(src, dst, register\_move[])}
+    \begin{algorithmic}[1] 
+        \REQUIRE $register\_move[]$ (gadgets moving regA to regB)
+        
+        \FOR{$register$ accessible from $src$}
+            \IF{$register \neq src$ $\AND$ $register = dst$}
+                \FOR{$gadget$ in $register\_move[]$}
+                    \IF{$gadget\_src = src$ \AND $gadget\_dst = register$}
+                        \IF{$\NOT\ SearchForConflict()$}
+                        \RETURN \TRUE
+                        \ENDIF
+                    \ENDIF
+                \ENDFOR
+            \ENDIF
+        \ENDFOR
+
+        \FOR{$register$ accessible from $src$}
+            \IF{$register\ \NOT$ visited $\AND\ register \neq src$}
+                \STATE $register \leftarrow visited$
+                \FOR{$gadget$ in $register\_move[]$}
+                    \IF{$gadget\_src = src$ \AND $gadget\_dst = register$}
+                        \IF{$\NOT\ SearchForConflict()$}
+                        \RETURN $IsMovable(register, dst, register\_move[])$
+                        \ENDIF
+                    \ENDIF
+                \ENDFOR
+            \ENDIF
+        \ENDFOR
+        \RETURN $\FALSE$
+
+    \end{algorithmic}
+\end{algorithm}
+
+We ensure that no side-effects occur within the gadget chain. In other words,
+we check if any intermediary instruction inside the gadget chain affects
+negatively a value modified beforehand. If so, the gadget is discarded.
+
+\begin{algorithm}
+    \caption{SearchForConflict(gadget, target)}
+    \begin{algorithmic}[1]
+        \STATE $unavailable \leftarrow [target\_src, target\_dst]$
+        \IF{$gadget\_src = target\_dst$}
+            \STATE $unavailable \leftarrow unavailable + target\_dst$
+        \ENDIF
+        
+        \FOR{$instruction$ in $gadget \leftarrow instructions$}
+            \IF{$instruction \leftarrow  dst$ in $unavailable$}
+            \RETURN $\TRUE$
+            \ENDIF
+        \ENDFOR
+        \RETURN $\FALSE$
+    \end{algorithmic}
+\end{algorithm}
+
+
 \begin{itemize}
     \item How the chaining algorithm works (+ pseudo code or/ flowchart ?)
     \item Example (in appendix?) or explained here
