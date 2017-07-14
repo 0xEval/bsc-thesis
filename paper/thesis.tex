@@ -44,7 +44,7 @@
   commentstyle=\ttfamily,
   keywordstyle=\bfseries,
   aboveskip=1pt,
-  belowskip=1pt,
+  belowskip=-5pt,
   frame=single,
   captionpos=b,
   showstringspaces=false,
@@ -507,7 +507,7 @@ them would require a delicate stack preparation.
 
 
 
-\subsection{Gadget chaining}
+\subsection{Gadget Chaining}
 
 The Matcher module is also in charge of chaining gadgets together mapping to
 the desired payload instruction. 
@@ -572,12 +572,81 @@ negatively a value modified beforehand. If so, the gadget is discarded.
     \item How the chaining algorithm works (+ pseudo code or/ flowchart ?)
     \item Example (in appendix?) or explained here
 \end{itemize}
+
+\subsection{Stack Preparation}
+
+We provide a visual representation of the stack for each payload instruction.
+We consider that the stack grows downwards, every value stored on the stack
+will be on reverse order.
+
+Each chain is analyzed looking for \texttt{pop} instructions. We distinguish
+two cases:
+
+\textit{Safeguard ret chain:} to keep the integrity of the return addresses
+chain, we store a placeholder value on the stack that will be popped.
+
+\textit{Immediate values:} certain instructions will read/write to immediate
+values. These values also need to be present on the stack as we inserted
+\textit{pop} gadgets to store them in specific registers.
+
+\textit{Gadget addresses:} the default case is storing the address of the
+beginning of each gadget chain.
+
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=-10pt]
+Target: mov dword ptr [eax], ds:0x0
+
+Gadget <0x806ff3a>:     g1: pop edx
+                        g2: ret;
+                   
+Gadget <0x808e8ea>:     g1: mov dword ptr [eax], edx
+                        g2: xor eax, eax
+                        g3: pop ebx
+                        g4: pop esi
+                        g5: pop edi
+                        g6: ret;
+             STACK
++=============================+
+|         <0x0806ff3a>        | address of G1
++=============================+
+|         <0x00000000>        | value to be popped
++=============================+
+|         <0x0808e8ea>        | address of G2
++=============================+
+|         <0x42424242>        | value to be popped
++=============================+
+|         <0x42424242>        | value to be popped
++=============================+
+|         <0x42424242>        | value to be popped
++=============================+
+\end{lstlisting}
+
+
 \subsection{Limitations}
-\begin{itemize}
-    \item Description of the tool's limitations, discussion of their impact and
-        how/if they should be handled ?
-    \item (ex: target architecture, input language, liveness, etc...)
-\end{itemize}
+Our tool is still a prototype and many things can be improved. We
+are reliant on external tools who present some flaws.
+
+\textit{Movfuscator:} It was built as toy-compiler for C programs only. In
+theory, it can be possible to overcome this problem by recompiling the source
+code to an another language using LLVM. An example of translation from
+\texttt{C++} to \texttt{C} was demonstrated by the author\footnote{see
+mofvuscator GitHub page}.
+
+\textit{Ropper:} is not under active maintenance anymore, one solution would be
+to implement one from the ground up and adapt our tool. Besides, the team
+behind PSHAPE demonstrated that gadget extraction have still some roomfor
+improvement.
+
+Currently, we can not guarantee a side-effect-free ROP chain as we only search
+for incompatibilites between a single payload instruction and its associated
+gadget chain. We do not verify whether the chain for the current
+payload instruction affects a value stored beforehand. One possibility would be
+to flag the registers holding important value and restraining from being used
+until it has been used.
+
+We support x86 32bits and instructions using full 32bits registers. Extending
+the support should be fairly easy but time-consumming.
+
+
 
 
 
@@ -621,6 +690,8 @@ negatively a value modified beforehand. If so, the gadget is discarded.
   \medskip
 
   \begin{tabular}{l|l|l}
+    \textbf{Total Gadgets}      & \textbf{2054} & \textbf{100\%} \\ \hline
+    Mov Gadgets                 & 1071          & 82\%           \\
     \textbf{Total Instructions} & \textbf{1270} & \textbf{100\%} \\ \hline
     Supported                   & 1042          & 82\%           \\ \hline
     Supported (w/o offsets)     & 962           & 75\%           \\ \hline
@@ -635,6 +706,8 @@ negatively a value modified beforehand. If so, the gadget is discarded.
   \medskip
 
   \begin{tabular}{l|l|l}
+    \textbf{Total Gadgets}      & \textbf{2054} & \textbf{100\%} \\ \hline
+    Mov Gadgets                 & 1071          & 82\%           \\
     \textbf{Total Instructions} & \textbf{2054} & \textbf{100\%} \\ \hline
     Supported                   & 1071          & 82\%           \\ \hline
     Supported (w/o offsets)     & 1579          & 76\%           \\ \hline
