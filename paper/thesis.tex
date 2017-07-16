@@ -6,6 +6,7 @@
 \usepackage{charter}
 \usepackage{algorithm}
 \usepackage[noend]{algorithmic}
+\usepackage[normalem]{ulem}
 
 %% Custom title page %%
 \usepackage[center,small,sc]{titlesec}
@@ -19,7 +20,6 @@
 
 %% BibTeX citation pkg
 \usepackage{cite}
-
 %% Footnotes
 
 %% Figures, listings with caption %%
@@ -43,6 +43,7 @@
   basicstyle=\small\ttfamily,
   commentstyle=\ttfamily,
   keywordstyle=\bfseries,
+  escapeinside={<@}{@>},
   aboveskip=1pt,
   belowskip=-5pt,
   frame=single,
@@ -73,7 +74,7 @@
         Vrije Universiteit Amsterdam\\
         \texttt{giuffrida@cs.vu.nl}
 }
-\title{\Huge Mov2Rop: <Find a title :(>\vspace{.75em}}
+\title{\Huge Exploiting ROP attacks with an unique instruction\vspace{.75em}}
 \maketitle
 
 \begin{abstract}
@@ -83,10 +84,10 @@
     target binary. In contrast to other works, we take advantage of the Turing
     completeness of the x86 mov instruction. By only having to handle mov
     instructions instead of the entire ISA, we reduce the complexity of crafting
-  payloads while keeping, in theory, the same degree of expresiveness.}
+  payloads while keeping, in theory, the same degree of expressiveness.}
 
   \textbf{We describe the fundamentals behind ROP attacks, and explain the
-    functionning of our tool. In addition, we discuss its limitations and the
+    functioning of our tool. In addition, we discuss its limitations and the
     results found using  sample test programs. Finally, we suggest ways to extend
   our work.}
 
@@ -110,7 +111,7 @@ a new approach \textit{return-to-libraries}\cite{solar_returnintolib_1997}
 attacks. Once the control-flow of a program was comprised, the attacker would
 use code (functions) already present in shared libraries. No code injection
 were required, thus bypassing the defenses we highlighted. A classic target was
-\textit{libc}\footnote{return-to-lib attacks are often refered as
+\textit{libc}\footnote{return-to-lib attacks are often referred as
 return-to-libc for that reason} that contained subroutines for powerful
 system calls that would insure arbitrary code execution. Back then, a
 common perception was that removing dangerous
@@ -119,7 +120,7 @@ current \textit{privileges}} would suffice to stop return-to-libc attacks.
 Besides, with the avenue of Intel's new 64bits x86 processors, the
 subroutines calling convention was changed to require the first argument of
 a function to be passed in a register instead of on the stack. Shared
-libraries developpers also began to restrict or remove library functions
+libraries developers also began to restrict or remove library functions
 that performed useful actions for attackers. As a result,
 return-to-libraries attacks were much harder to craft successfully and
 faded away for a time.
@@ -128,7 +129,7 @@ At Black Hat USA 08, Roemer et al.\  presented a Turing-complete exploit
 language capable of arbitrary code execution without relying on shared
 libraries. \textit{Return Oriented Programming
 (ROP)}\cite{roemer_return-oriented_2012} has now become the main technique of
-choice for nearly all modern exploits of memory-safety vulnerabilites.
+choice for nearly all modern exploits of memory-safety vulnerabilities.
 
 In this paper, we present \textit{Mov2Rop} an attempt at creating a ROP
 pseudo-compiler that translates an exploit of choice into a gadget chain for a
@@ -165,7 +166,7 @@ violation.
 
 \textbf{\textit{Data segment:}} it is split in two part
 \begin{itemize}
-\item Initializated data, simply called data segment
+\item Initialized data, simply called data segment
 \item Uninitialized data, also known as the bss segment
 \end{itemize}
     The data segment contains the global variables and static variables
@@ -208,7 +209,7 @@ reproduce the behavior of Intel processors.
 \subsection{Buffer Overflows}
 
 Low level languages directly compiled to machine code such as C/C++ offer wide
-possibilites of implementation without the cost of speed. However, this level
+possibilities of implementation without the cost of speed. However, this level
 of freedom over memory management increases the risk of errors from programmers.
 Indeed, many powerful instructions can easily be exploited if used improperly.
 Numerous attacks aim at diverting the control-flow during the execution of a
@@ -224,17 +225,17 @@ program, while writing data to a buffer, overruns the buffer's boundary and
 overwrites adjacent memory locations. In other words, a buffer overflow condition exists when a program attempts to put more data in a buffer than it can
 hold or when a program attempts to put data in a memory area past a
 buffer. Overflows can be used to modify return address or code pointers in order
-to execute a malicious piece of code, sometimes already exisiting within the
+to execute a malicious piece of code, sometimes already existing within the
 program's space or injected by the attacker. In resume, buffer overflows rely
-on two principal fators: 
+on two principal factors: 
 
 \begin{itemize}
     \item Low level language's liberal approach to memory handling
-    \item Exploiting the filesystem permission
+    \item Exploiting the file system permission
 \end{itemize}
 
 With cautious manipulations, an attacker could grant himself unrestricted
-priviledge to unpriviledged account or user.
+privilege to unprivileged account or user.
 
 \textbf{\textit{Example:}} \textit{stack-based buffer
 overflow}\cite{one_stacksmashing_1996}. When invoking or exiting a standard C
@@ -328,7 +329,7 @@ little research concluded to a satisfying automated method of crafting Turing co
 exploits.
 
 \textbf{\textit{Example:}} see \autoref{lst_ropchain}. We want to give a
-general understanding on how gadget chaining generaly works. Here, we need to
+general understanding on how gadget chaining generally works. Here, we need to
 concatenate \texttt{"/bin/sh"} in a buffer by chaining functions together and
 finally spawn a shell. Each functions requires specific parameters that we need
 to store on the stack along with the gadget chain.We supposedly found a memory
@@ -370,13 +371,14 @@ prepared with a ROP chain]
 
 \section{RELATED WORK}
 
-\textit{Control-flow integrity (CFI)\cite{mulder_subject_2016}} regroup techniques which prevents malwares
-attacks from redirecting the flow of execution of a program. Many techniques
-were/are being developped to maintain control-flow integrity. However, recent
-research also showed that many of these (dated) defenses can be bypassed.
+\textit{Control-flow integrity (CFI)\cite{mulder_subject_2016}} regroup
+techniques which prevents malware attacks from redirecting the flow of
+execution of a program. Many techniques were/are being developed to maintain
+control-flow integrity. However, recent research also showed that many of these
+(dated) defenses can be bypassed.
 
 \textit{Address Space Layout Randomization:} ALSR makes it more difficult for
-an attacker to predict target addresse. It rearranges the address space
+an attacker to predict target address. It rearranges the address space
 positions of key data areas of a process, including the base of the executable
 and the positions of the stack, heap and libraries.
 
@@ -393,7 +395,7 @@ copy operation, the error is noticed before execution returns from the copy
 function.
 
 While these techniques improved our defenses against ROP attacks, most of them only
- complexify the infection vector but do not fix the underlying vulnerability.
+ complexify the infection but do not fix the underlying vulnerability.
 
 \textbf{\textit{ROP Compiler:}} Follner et al.\ presented
 PSHAPE\cite{barthe_pshape:_2016}, a state-of-the-art open source gadget
@@ -431,7 +433,7 @@ objects. Gadgets are defined by a list of \textit{Instruction} objects and the
 address of its first instruction. We define an Instruction by a label, an
 address, a mnemonic, a source and a destination (without optional offsets).
 Mnemonics are short strings representing the type of instruction. A mnemonic is
-assigned by looking-up in a dictionnary of opcodes. The opcode is extracted
+assigned by looking-up in a dictionary of opcodes. The opcode is extracted
 with regular expressions manipulations on Ropper's output.
 
 \begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
@@ -455,22 +457,22 @@ Mnemonic: MOV r32,r/m32
 0xA3 & MOV imm32,r32 & Memory write from 32bits reg to imm val \\ \hline
 \multicolumn{1}{c|}{...} & \multicolumn{1}{c|}{...} & \multicolumn{1}{c}{...}
 \end{tabular}
-\caption{Opcode Dictionnary}
+\caption{Opcode Dictionary}
 \end{table*}
 
 \subsection{Payload Treatment}
 
 The source code that we want to translate is firstly compiled to an object file
 in Intel syntax using \textit{movfuscator}.  We use
-Capstone\cite{quynh_capstone}, a multi architecture dissassembly framework to
-analyze each instruction. The Dissassembler module searches for all
+Capstone\cite{quynh_capstone}, a multi architecture disassembly framework to
+analyze each instruction. The Disassembler module searches for all
 \texttt{mov} and creates Instructions objects similarly to Extractor. When
-created, an Instruction is assigned a mnemonic reference if the dictionnary
-lookup was succesful, otherwise it's simply refered as not supported.
+created, an Instruction is assigned a mnemonic reference if the dictionary
+lookup was successful, otherwise it's simply referred as not supported.
 
 \subsection{Instruction Analysis}
 
-The Matcher module will create lists containting each type of gadgets. We
+The Matcher module will create lists containing each type of gadgets. We
 divide them in three categories: memory read, memory writes, and register
 moves. The output of the Extractor module is analyzed using an expandable set
 of rules.
@@ -479,7 +481,7 @@ of rules.
 modify \texttt{esp} at any point in time as it would neutralize our stack
 preparation and thus the payload's execution.
 
-\textit{Restricted instrutions:} certain instructions like \texttt{call} or
+\textit{Restricted instructions:} certain instructions like \texttt{call} or
 \texttt{leave} introduce jumps at undetermined addresses.
 
 \textit{Conflict prevention:} we try to prevent conflicts between instructions when the
@@ -511,6 +513,29 @@ them would require a delicate stack preparation.
 
 The Matcher module is also in charge of chaining gadgets together mapping to
 the desired payload instruction. 
+
+Firstly, we mapped all possible movements between registers to obtain a general
+view. On a very simple program (with glibc statically linked) we got the
+following map:
+
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+Possible reg mov:
+        src: dst (<> = direct, [] = chained)
+        eax: <edi edx> [eax esi ebx ecx] <@\sout{ebp esp}@>
+        ebx: <eax> [edi edx esi ebx ecx] <@\sout{ebp esp}@>
+        ebx: <eax> [edi edx esi ebx ecx] <@\sout{ebp esp}@>
+        ecx: <eax> [edi edx esi ebx ecx] <@\sout{ebp esp}@>
+        edx: <eax esi ebx ecx> [edi edx] <@\sout{ebp esp}@>
+        ebp: <eax> [edi edx esi ebx ecx] <@\sout{ebp esp}@>
+        edi: <eax edx> [esi ebx edi ecx] <@\sout{ebp esp}@>
+        esi: <eax esi> [edi edx ebx ecx] <@\sout{ebp esp}@>
+\end{lstlisting}
+
+For example on the first line, the map highlights that at least one gadget that
+allows to move the content of \texttt{edi} to \texttt{eax}
+directly\footnote{with a "pure" gadget constituted of one instruction followed
+by a \texttt{ret}}. The map is useful when its needed to weave gadgets together
+in order to fit a target instruction.
 
 \begin{algorithm}
     \caption{IsMovable(src, dst, register\_move[])}
@@ -633,24 +658,20 @@ mofvuscator GitHub page}.
 
 \textit{Ropper:} is not under active maintenance anymore, one solution would be
 to implement one from the ground up and adapt our tool. Besides, the team
-behind PSHAPE demonstrated that gadget extraction have still some roomfor
+behind PSHAPE demonstrated that gadget extraction have still some room for
 improvement.
 
 Currently, we can not guarantee a side-effect-free ROP chain as we only search
-for incompatibilites between a single payload instruction and its associated
+for incompatibilities between a single payload instruction and its associated
 gadget chain. We do not verify whether the chain for the current
 payload instruction affects a value stored beforehand. One possibility would be
 to flag the registers holding important value and restraining from being used
 until it has been used.
 
 We support x86 32bits and instructions using full 32bits registers. Extending
-the support should be fairly easy but time-consumming.
+the support should be fairly easy but time-consuming.
+ 
 
-
-
-
-
-  
 \section{RESULTS \& CONCLUSION}
   We tested our tool on two sample programs written in C. For each case, the
   target binary is the program compiled with a static version of \textit{glibc}
@@ -664,13 +685,23 @@ the support should be fairly easy but time-consumming.
   work making ROP attacks an even bigger threat.
 
 \section{FURTHER WORK}
-\begin{itemize}
-    \item How to improve our tool
-    \item LLVM migration ?
-    \item extending supported instructions
-    \item payload generator from the gadget chain
-    \item side-effect management
-\end{itemize}
+
+In its current state, our tool is a prototype in its early stage. It could be
+improved in two different ways: either we decide to extend the current
+functionalities or we shift our initial perspective to obtain a more practical
+program.
+
+Improving the robustness of the current tool using theorem provers. Extending
+the amount of supported instructions to cover all variations of \texttt{mov}
+instructions. Support to \texttt{x86\_64} architecture would also be
+interesting. Another essential feature is a more complete side-effect
+verification on the gadget chain.
+
+Migrating the tool into an LLVM backend would allow to use any source language
+compilable to LLVM IR. However, this also means abandoning the idea of using
+\texttt{mov} instructions only which was one of our principal motivation. That
+being said, the LLVM project has a big community that keeps growing. To this
+day, no ROP compilers were integrated into LLVM.
 
 
 \section{REFERENCES}
@@ -717,6 +748,17 @@ the support should be fairly easy but time-consumming.
   \caption{Statistics on hanoi\_towers.c}
 \end{table}
 
-\lstinputlisting[float,label=lst_ropexploit,caption=ROP exploit in Python,language=Python]{./snippets/rop_chain.py}
+\begin{lstlisting}[float, caption=Sample movfuscator output]
+Dumping target payload <test_programs/fibonacci.o>:
+-----------------------------------------------------
+(...)
+ 15c: 8b 04 8d 00 00 00 00  mov  eax,DWORD PTR [ecx*4+0x0]
+ 163: 8b 15 00 00 00 00     mov  edx,DWORD PTR ds:0x0
+ 169: 89 10                 mov  DWORD PTR [eax],edx
+ 16b: c7 05 00 00 00 00 00  mov  DWORD PTR ds:0x0,0x0
+(...)
+\end{lstlisting}
+
+\lstinputlisting[float=h,label=lst_ropexploit,caption=ROP exploit in Python,language=Python]{./snippets/rop_chain.py}
 
 \end{document}
