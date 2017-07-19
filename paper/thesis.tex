@@ -46,6 +46,7 @@
   escapeinside={<@}{@>},
   aboveskip=1pt,
   belowskip=-5pt,
+  belowcaptionskip=-3pt,
   frame=single,
   captionpos=b,
   showstringspaces=false,
@@ -74,7 +75,7 @@
         Vrije Universiteit Amsterdam\\
         \texttt{giuffrida@cs.vu.nl}
 }
-\title{\Huge Exploiting ROP attacks with an unique instruction\vspace{.75em}}
+\title{\Huge Exploiting ROP attacks with a unique instruction\vspace{.75em}}
 \maketitle
 
 \begin{abstract}
@@ -96,42 +97,41 @@
 \section{INTRODUCTION}
 
 The widespread adoption of \textit{Data Execution Prevention (DEP)}, which
-ensures that writable memory regions are non-executable by marking them with a
-special flag, such that an attempt to execute machine code in these regions
+ensures that writable memory regions are non-executable\footnote{also referred
+as W$\oplus$X}, such that an attempt to execute machine code in these regions
 will cause an exception has largely mitigated classic code injections attacks.
-W$\oplus$X was the industry response to code injection exploits, it is deployed
-in virtually all main operating systems: Linux (via PaX patches), OpenBSD,
-Windows (since XP SP2), OS X (since 10.5), Android and so on\ldots Hardware
-constructors also provided easy support with an extra flag dedicated to the
-marking: Intel "XD" and AMD "WX" to name a few.
+It is deployed in virtually all main operating systems: Linux (first via PaX
+patches), OpenBSD, Windows (since XP SP2), OS X (since 10.5), Android and so
+on. Hardware now features easy DEP support with an extra flag dedicated to the
+marking: Intel "XD" and AMD "NX" to name a few.
 
-DEP techniques and W$\oplus$X largely killed classic code injection attacks.
-However, as one exploit faded another arose. In 1997, Solar Designer presented
-a new approach \textit{return-to-libraries}\cite{solar_returnintolib_1997}
-attacks. Once the control-flow of a program was comprised, the attacker would
-use code (functions) already present in shared libraries. No code injection
-were required, thus bypassing the defenses we highlighted. A classic target was
-\textit{libc}\footnote{return-to-lib attacks are often referred as
-return-to-libc for that reason} that contained subroutines for powerful
-system calls that would insure arbitrary code execution. Back then, a
-common perception was that removing dangerous
-\textit{syscalls}\footnote{system() allows to execute any program with the
-current \textit{privileges}} would suffice to stop return-to-libc attacks.
-Besides, with the avenue of Intel's new 64bits x86 processors, the
-subroutines calling convention was changed to require the first argument of
-a function to be passed in a register instead of on the stack. Shared
-libraries developers also began to restrict or remove library functions
-that performed useful actions for attackers. As a result,
-return-to-libraries attacks were much harder to craft successfully and
+DEP techniques largely killed classic code injection attacks.  However, as one
+exploit faded another arose. In 1997, Solar Designer presented a new approach
+\textit{return-to-libraries}\cite{solar_returnintolib_1997} attacks. Once the
+control-flow of a program was comprised, the attacker would use code
+(functions) already present in shared libraries. As no code injection was
+required, doing so would bypass the defenses we highlighted. A classic target
+was \textit{libc}\footnote{return-to-lib attacks are often referred as
+return-to-libc for that reason} that contained subroutines for powerful system
+calls that would allow arbitrary code execution. Back then, a common perception
+was that removing dangerous \textit{syscalls}\footnote{system() allows to
+execute any program with the current \textit{privileges}} from standard libraries
+would suffice to stop return-to-libc attacks.  Besides, with the arrival of
+Intel's new 64bits x86 processors, the subroutines calling convention was
+changed to require most arguments of a function to be passed in registers
+instead of on the stack. Shared libraries developers also began to restrict or
+remove library functions that performed useful actions for attackers. As a
+result, return-to-libraries attacks were much harder to craft successfully and
 faded away for a time.
 
-At Black Hat USA 08, Roemer et al.\  presented a Turing-complete exploit
-language capable of arbitrary code execution without relying on shared
-libraries. \textit{Return Oriented Programming
-(ROP)}\cite{roemer_return-oriented_2012} has now become the main technique of
-choice for nearly all modern exploits of memory-safety vulnerabilities.
+At Black Hat USA 08, Roemer et al.\ presented a Turing-complete exploit
+language (initially proposed by Shacham\cite{shacham_rop_2007} at CCS in
+2007) capable of arbitrary code execution without relying on shared libraries.
+\textit{Return Oriented Programming (ROP)}\cite{roemer_return-oriented_2012}
+has now become the main technique of choice for nearly all modern exploits of
+memory-safety vulnerabilities.
 
-In this paper, we present \textit{Mov2Rop} an attempt at creating a ROP
+In this paper, we present \textit{Mov2Rop}, an attempt at creating a ROP
 pseudo-compiler that translates an exploit of choice into a gadget chain for a
 target binary. In its current state, the only supported architecture is Intel
 x86. One of our motivations was to make use of Domas' single instruction
@@ -158,13 +158,13 @@ Processes are divided into three regions or segments: \textit{Text, Data} and
   \label{fig_memorg}
 \end{figure}
 
-\textbf{\textit{Text segment:}} also known as code segment, it is fixed by the program, it
-includes the executable instructions and read-only data. This region
-corresponds to the text section of the executable file. It is normally
-marked read-only and any attempt to write to it will result in a segmentation
-violation.
+\textbf{\textit{The text segment,}} also known as code segment, includes the
+executable instructions and read-only data. This region corresponds to the text
+section of the executable file. It is normally marked read-only and any attempt
+to write to it will result in a segmentation violation.
 
-\textbf{\textit{Data segment:}} it is split in two part
+\textbf{\textit{The data segment}} is split in two parts (see
+\autoref{lst-variable})
 \begin{itemize}
 \item Initialized data, simply called data segment
 \item Uninitialized data, also known as the bss segment
@@ -175,20 +175,20 @@ all global variables and static variables that are initialized to zero or do
 not have explicit initialization in source code.
 
 \begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Variable
-location in memory,language=C] 
+location in memory,language=C,label=lst-variable] 
 // this static variable is stored in the BSS segment
 static int bss_variable;
 // this global variable is in the DATA segment
 int data_variable = 42; 
 \end{lstlisting}
 
-\textbf{\textit{Heap segment:}} it is the region where dynamic memory
+\textbf{\textit{The heap segment}} is the region where dynamic memory
 allocation takes place. The heap area commonly begins at the end of the
 \texttt{.bss} and \texttt{.data} segments and grows to larger addresses from
 there.
 
-\textit{\textbf{Stack segment:}} a stack is a contiguous block of memory
-containing data. It is a \textit{Last In First Out} data structure, which means
+\textit{\textbf{The stack segment,}} a stack is a contiguous block of memory
+containing data such as the local variables of functions. It is a \textit{Last In First Out} data structure, which means
 literally that the latest value stored on the stack will be the first to be
 removed, commonly used
 in computers. A register called the \textit{stack pointer} points to
@@ -197,14 +197,14 @@ pointer is also present which points to a fixed location within a frame. Its
 size is dynamically adjusted by the kernel at run time.
 
 Every processor \textit{Instruction Set Architecture (ISA)} integrates
-instructions to \texttt{push} and \texttt{pop} values onto/off the stack. The stack consists of
-logical stack frames that are pushed when calling a function and popped when
-returning. A stack frame contains the parameters to a function, its local
-variables, and the data necessary to recover the previous stack frame,
-including the value of the instruction pointer at the time of the function
-call. Depending on its implementation the stack will grow up or down. In the
-rest of this paper, we will consider that the stack grows downwards to
-reproduce the behavior of Intel processors.
+instructions to \texttt{push} and \texttt{pop} values onto/off the stack. The
+stack consists of logical stack frames that are pushed when calling a function
+and popped when returning. In 32bits architectures, a stack frame contains the
+parameters to a function, its local variables, and the data necessary to
+recover the previous stack frame, including the value of the instruction
+pointer at the time of the function call. Depending on its implementation the
+stack will grow up or down. In the rest of this paper, we will consider that
+the stack grows downwards to reproduce the behavior of Intel processors.
 
 \subsection{Buffer Overflows}
 
@@ -213,7 +213,7 @@ possibilities of implementation without the cost of speed. However, this level
 of freedom over memory management increases the risk of errors from programmers.
 Indeed, many powerful instructions can easily be exploited if used improperly.
 Numerous attacks aim at diverting the control-flow during the execution of a
-program. Buffer overflows still plague many programs and are a main research
+program. Buffer overflows and other memory corruption vulnerabilities still plague many programs and are a main research
 topic in computer
 security\cite{DBLP:journals/iee/MouzaraniSZ16,DBLP:journals/iee/PadmanabhuniT16,DBLP:conf/ant/LeonB16}.
 
@@ -226,16 +226,15 @@ overwrites adjacent memory locations. In other words, a buffer overflow conditio
 hold or when a program attempts to put data in a memory area past a
 buffer. Overflows can be used to modify return address or code pointers in order
 to execute a malicious piece of code, sometimes already existing within the
-program's space or injected by the attacker. In resume, buffer overflows rely
-on two principal factors: 
-
+program's space or injected by the attacker. Buffer overflow vulnerabilities typically occur in code that:
 \begin{itemize}
-    \item Low level language's liberal approach to memory handling
-    \item Exploiting the file system permission
+    \item Relies on external data to control its behavior
+    \item Depends upon properties of the data that are enforced outside of the immediate scope of the code
+    \item Is so complex that a programmer cannot accurately predict its behavior
 \end{itemize}
 
 With cautious manipulations, an attacker could grant himself unrestricted
-privilege to unprivileged account or user.
+privilege to an unprivileged account or user.
 
 \textbf{\textit{Example:}} \textit{stack-based buffer
 overflow}\cite{one_stacksmashing_1996}. When invoking or exiting a standard C
@@ -244,16 +243,18 @@ the previous variables and allocating space for the new variables; and
 vice-versa when the function exits. The previous FP is pushed, a new FP is
 created and SP operates with respect to its new local variables.
 
-\textbf{\textit{Procedure:}} in the following \autoref{lst_overflow},
-the vulnerability comes from a wrong use of \textit{strcpy()}. The target
-information are the size of the buffer and the address of
-\textit{exec\_shell()}. The
-former will help us overflow the buffer without going too far leading to a
-segmentation fault while the latter is the address we want to return to. Any disassembler tool like \textit{gdb} can give us the
-information we need to perform the overflow and spawn a shell.
+\textbf{\textit{Procedure:}} in the following program (see
+\autoref{lst_overflow}), the
+vulnerability comes from a wrong use of \textit{strcpy()}. We disabled ASLR and
+Stack Canaries for the sake of simplicity. The target information are the size
+of the buffer and the address of \textit{exec\_shell()}. The former will help
+us overflow the buffer without going too far which would lead to a segmentation
+fault while the latter is the address we want to return to. Any disassembler
+tool like \textit{gdb} (see \autoref{lst-gdb}) can give us the information we need to perform the
+overflow and spawn a shell (see \autoref{lst-shell}).
 
 \begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Gdb
-output on simple\_overflow.c]
+output on simple\_overflow.c,label=lst-gdb]
 $ gdb -q simple_overflow
 (...)
 (gdb) disas vuln_func
@@ -275,9 +276,11 @@ $1 = (...) 0x80484fb <exec_shell>
 To overwrite the return address with the one of \textit{exec\_shell()} we need
 to fill the buffer with $100$ bytes, overwrite SFP\footnote{the saved frame
 pointer (old content of \%ebp) is called SFP} with a dummy value and then the
-target address.
+target address. \autoref{lst-stackstate} shows the state of the stack before and
+after the overflow.
 
-\begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack before and after overflow]
+\begin{lstlisting}[float=h,aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Stack
+before and after overflow,label=lst-stackstate]
 | <argument>                 |
 | <return address>           |
 | <old %ebp>                 | <= %ebp
@@ -299,9 +302,11 @@ target address.
 In practice, once the return address is overwritten, the attacker can perform
 his exploit via a \textit{code injection} assuming no defenses are in place,
 \textit{return-to-libraries} attack, or \textit{return oriented programming}
-attack.
+attack. In the remainder of this paper, we will assume that we deal with a
+32bits architecture.
 
-\begin{lstlisting}[float=ht,belowskip=\medskipamount]
+\begin{lstlisting}[float=ht,belowskip=\medskipamount,caption=Spawning a
+shell,label=lst-shell]
 $ ./simple_overflow "$(python2 -c 'print "A"*0x6c + "BBBB" + "\xfb\x84\x04\x08"')"
 Spawning a shell !
 sh-4.4$
@@ -313,8 +318,8 @@ In this section we will introduce the concepts behind \textit{return-oriented pr
 
 Return-oriented programming is a technique by which an attacker can induce
 arbitrary behavior in a program whose control-flow he has diverted, without
-injecting any code. It was built to overcome buffer exploit defense
-mechanisms like ASLR, DEP or W$\oplus$X. The technique consists of aggregating
+injecting any code. It was built to overcome buffer exploit defense mechanisms
+like ASLR (in a non-trivial way), or DEP. The technique consists of aggregating
 malicious computation by linking together short code snippets called
 \textit{gadgets}.  A \textit{gadget} ends in a \texttt{ret} instruction and is
 located in a subroutine within the program's address space. Chained together,
@@ -322,19 +327,19 @@ these gadgets allows an attacker who controls the call stack to build and
 execute his payload. Because the executed code is stored in memory marked
 executable, the W$\oplus$X defense will not prevent it from running.
 
-ROP can be seen as a generalization of traditional return-into-lib attacks. But
-the threat is more general. In theory, ROP can be used to make Turing complete
-attacks. However, in practice, it requires a really complex work and very
-little research concluded to a satisfying automated method of crafting Turing complete
+Return oriented programming can be seen as a generalization of traditional
+return-into-lib attacks. But the threat is more general. In theory, ROP can be
+used to make Turing complete attacks. However, in practice is quite complex and
+very little research exists to automate the creation of Turing complete
 exploits.
 
 \textbf{\textit{Example:}} see \autoref{lst_ropchain}. We want to give a
 general understanding on how gadget chaining generally works. Here, we need to
 concatenate \texttt{"/bin/sh"} in a buffer by chaining functions together and
-finally spawn a shell. Each functions requires specific parameters that we need
-to store on the stack along with the gadget chain.We supposedly found a memory
-vulnerability that allows us to perform a stack-buffer overflow in the same
-conditions as the last example.
+finally spawn a shell. Each function requires specific parameters that we need
+to store on the stack along with the gadget chain. We assume that we have a
+memory vulnerability that allows us to perform a stack-buffer overflow in the
+same conditions as the last example.
 
 \textbf{\textit{Stack preparation:}} an attacker prepares a fake stack frame to
 look like a collection of new return addresses for control-flow changes. In
@@ -371,21 +376,21 @@ prepared with a ROP chain]
 
 \section{RELATED WORK}
 
-\textit{Control-flow integrity (CFI)\cite{mulder_subject_2016}} regroup
-techniques which prevents malware attacks from redirecting the flow of
-execution of a program. Many techniques were/are being developed to maintain
-control-flow integrity. However, recent research also showed that many of these
-(dated) defenses can be bypassed.
+\textit{Control-flow integrity (CFI)\cite{mulder_subject_2016}} is a property
+of a program which says that the flow of execution does not divert from the
+intended or original control flow graph. Many techniques were/are being
+developed to maintain control-flow integrity. However, recent research also
+showed that many of these (dated) defenses can be bypassed.
 
 \textit{Address Space Layout Randomization:} ALSR makes it more difficult for
-an attacker to predict target address. It rearranges the address space
+an attacker to predict the target address. It rearranges the address space
 positions of key data areas of a process, including the base of the executable
 and the positions of the stack, heap and libraries.
 
-\textit{ShadowStacks\cite{Sinnadurai_transparentruntime}:} This technique
-mitigates return address overwrites by keeping a record of of the legitimate
-return address for some function call, and then to check that the return
-address is still correct before returning.
+\textit{ShadowStacks:} This technique mitigates return address overwrites by
+keeping a record of of the legitimate return address for a function call on a
+separate stack, and then to check that the return address is still correct
+before returning.
 
 \textit{Stack Canaries:} They are used to detect a stack buffer overflow before
 execution of malicious code can occur. Stack canaries work by modifying every
@@ -408,7 +413,7 @@ automatically in nine out of eleven practical cases.
 \section{MOV2ROP}
 
 In this paper, we are trying to translate a given exploit into a ROP chain for
-a target binary. Our work differ from other compilers as we chose to compiled
+a target binary. Our work differs from other compilers as we chose to compile
 the source code into mov instructions only using an external compiler
 \textit{movfuscator}. Mov2Rop is written in Python and is divided into three
 different modules: the \textit{Extractor}, \textit{Dissassembler}, and
@@ -418,9 +423,10 @@ different modules: the \textit{Extractor}, \textit{Dissassembler}, and
 
 We use Ropper's engine\cite{sashs_ropper} within the Extractor  module to
 extract gadgets from binaries. Gadgets are searched according to a regular
-expression.
+expression (see \autoref{lst:ropper}).
 
-\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt,caption=Ropper
+search engine,label=lst:ropper]
 $ ropper --file target_bin --search "pop e??; ret;"
 0x080bbf26: pop eax; ret;
 0x08048411: pop ebp; ret;
@@ -429,14 +435,16 @@ $ ropper --file target_bin --search "pop e??; ret;"
 \end{lstlisting}
 
 The output is then parsed by our program to create a list of \textit{Gadget}
-objects. Gadgets are defined by a list of \textit{Instruction} objects and the
+objects. Gadgets are defined by a list of \textit{Instruction} objects (see
+\autoref{lst:instruction}) and the
 address of its first instruction. We define an Instruction by a label, an
 address, a mnemonic, a source and a destination (without optional offsets).
 Mnemonics are short strings representing the type of instruction. A mnemonic is
-assigned by looking-up in a dictionary of opcodes. The opcode is extracted
+assigned by looking-up in a dictionary of opcodes (see \autoref{tab:opcode}). The opcode is extracted
 with regular expressions manipulations on Ropper's output.
 
-\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt,caption=Example
+instruction object,label=lst:instruction]
 Instruction found at <0x80d5386>
 ---------------------------------
 Mnemonic: MOV r32,r/m32
@@ -465,17 +473,17 @@ Mnemonic: MOV r32,r/m32
 The source code that we want to translate is firstly compiled to an object file
 in Intel syntax using \textit{movfuscator}.  We use
 Capstone\cite{quynh_capstone}, a multi architecture disassembly framework to
-analyze each instruction. The Disassembler module searches for all
-\texttt{mov} and creates Instructions objects similarly to Extractor. When
+analyze each instruction. The Disassembler module searches for all \texttt{mov}
+instructions and creates Instructions objects similar to Extractor. When
 created, an Instruction is assigned a mnemonic reference if the dictionary
-lookup was successful, otherwise it's simply referred as not supported.
+lookup was successful, otherwise it's simply referred to as not supported.
 
 \subsection{Instruction Analysis}
 
-The Matcher module will create lists containing each type of gadgets. We
-divide them in three categories: memory read, memory writes, and register
+The Matcher module will create lists containing each type of gadget. We
+divide them in three categories: memory reads, memory writes, and register
 moves. The output of the Extractor module is analyzed using an expandable set
-of rules.
+of rules (see \autoref{lst:rule}).
 
 \textit{No action on \texttt{esp}}: because of the nature of ROP, we cannot
 modify \texttt{esp} at any point in time as it would neutralize our stack
@@ -489,7 +497,8 @@ gadget is longer than $2$. No intermediary instruction can affect the
 \texttt{\%dest} register to ensure the desired effect.
 
 
-\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt,caption=Rule
+verification,label=lst:rule]
 X write on ESP
 Gadget <0x80a1de3>: g1: mov dword ptr [eax], edx
                     g2: add esp, 8
@@ -516,9 +525,10 @@ the desired payload instruction.
 
 Firstly, we mapped all possible movements between registers to obtain a general
 view. On a very simple program (with glibc statically linked) we got the
-following map:
+following map (see \autoref{lst:map}):
 
-\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt,caption=Map
+of movement between registers,label=lst:map]
 Possible reg mov:
         src: dst (<> = direct, [] = chained)
         eax: <edi edx> [eax esi ebx ecx] <@\sout{ebp esp}@>
@@ -534,11 +544,12 @@ Possible reg mov:
 For example on the first line, the map highlights that at least one gadget that
 allows to move the content of \texttt{edi} to \texttt{eax}
 directly\footnote{with a "pure" gadget constituted of one instruction followed
-by a \texttt{ret}}. The map is useful when its needed to weave gadgets together
+by a \texttt{ret}}. The map is useful when we need to weave gadgets together
 in order to fit a target instruction.
 
 \begin{algorithm}
     \caption{IsMovable(src, dst, register\_move[])}
+    \label{alg:is_movable}
     \begin{algorithmic}[1] 
         \REQUIRE $register\_move[]$ (gadgets moving regA to regB)
         
@@ -571,12 +582,14 @@ in order to fit a target instruction.
     \end{algorithmic}
 \end{algorithm}
 
-We ensure that no side-effects occur within the gadget chain. In other words,
+We ensure that no side-effects occur within the gadget chain (see Algorithm 
+\autoref{alg:search_for_conflict}). In other words,
 we check if any intermediary instruction inside the gadget chain affects
 negatively a value modified beforehand. If so, the gadget is discarded.
 
 \begin{algorithm}
     \caption{SearchForConflict(gadget, target)}
+    \label{alg:search_for_conflict}
     \begin{algorithmic}[1]
         \STATE $unavailable \leftarrow [target\_src, target\_dst]$
         \IF{$gadget\_src = target\_dst$}
@@ -592,23 +605,19 @@ negatively a value modified beforehand. If so, the gadget is discarded.
     \end{algorithmic}
 \end{algorithm}
 
-
-\begin{itemize}
-    \item How the chaining algorithm works (+ pseudo code or/ flowchart ?)
-    \item Example (in appendix?) or explained here
-\end{itemize}
-
 \subsection{Stack Preparation}
 
-We provide a visual representation of the stack for each payload instruction.
-We consider that the stack grows downwards, every value stored on the stack
-will be on reverse order.
+We provide a visual representation (see \autoref{lst-stack}) of the stack for
+each payload instruction.  We consider that the stack grows downwards, and that
+every value will be stored on the stack on reverse order.
 
-Each chain is analyzed looking for \texttt{pop} instructions. We distinguish
+Each chain is analyzed looking for \texttt{pop} instructions. If present, we
+need to prepare the stack in a certain way. We distinguish
 two cases:
 
 \textit{Safeguard ret chain:} to keep the integrity of the return addresses
-chain, we store a placeholder value on the stack that will be popped.
+chain, we store a placeholder value on the stack. That value that will be
+popped and the function will return to the next gadget address.
 
 \textit{Immediate values:} certain instructions will read/write to immediate
 values. These values also need to be present on the stack as we inserted
@@ -617,7 +626,8 @@ values. These values also need to be present on the stack as we inserted
 \textit{Gadget addresses:} the default case is storing the address of the
 beginning of each gadget chain.
 
-\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=-10pt]
+\begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=-10pt,label=lst-stack,caption=
+Stack preparation]
 Target: mov dword ptr [eax], ds:0x0
 
 Gadget <0x806ff3a>:     g1: pop edx
@@ -648,17 +658,17 @@ Gadget <0x808e8ea>:     g1: mov dword ptr [eax], edx
 
 \subsection{Limitations}
 Our tool is still a prototype and many things can be improved. We
-are reliant on external tools who present some flaws.
+rely on external tools who present some flaws and limitations.
 
 \textit{Movfuscator:} It was built as toy-compiler for C programs only. In
-theory, it can be possible to overcome this problem by recompiling the source
+theory, it is possible to overcome this problem by recompiling the source
 code to an another language using LLVM. An example of translation from
 \texttt{C++} to \texttt{C} was demonstrated by the author\footnote{see
 mofvuscator GitHub page}.
 
 \textit{Ropper:} is not under active maintenance anymore, one solution would be
 to implement one from the ground up and adapt our tool. Besides, the team
-behind PSHAPE demonstrated that gadget extraction have still some room for
+behind PSHAPE demonstrated that gadget extraction still has some room for
 improvement.
 
 Currently, we can not guarantee a side-effect-free ROP chain as we only search
@@ -721,12 +731,12 @@ day, no ROP compilers were integrated into LLVM.
   \medskip
 
   \begin{tabular}{l|l|l}
-    \textbf{Total Gadgets}      & \textbf{2054} & \textbf{100\%} \\ \hline
-    Mov Gadgets                 & 1071          & 82\%           \\
+    \textbf{Total Gadgets}      & \textbf{13124} & \textbf{100\%} \\ \hline
+    Mov Gadgets                 & 953           &  7\%           \\
     \textbf{Total Instructions} & \textbf{1270} & \textbf{100\%} \\ \hline
-    Supported                   & 1042          & 82\%           \\ \hline
-    Supported (w/o offsets)     & 962           & 75\%           \\ \hline
-    Not supported               & 228           & 17\%          
+    Supported                   & 1178          & 92\%           \\ \hline
+    Supported (w/o offsets)     & 1098          & 85\%           \\ \hline
+    Not supported               & 92            &  7\%          
   \end{tabular}%
   \label{result-fibo}
   \caption{Statistics on fibonacci.c}
@@ -737,12 +747,12 @@ day, no ROP compilers were integrated into LLVM.
   \medskip
 
   \begin{tabular}{l|l|l}
-    \textbf{Total Gadgets}      & \textbf{2054} & \textbf{100\%} \\ \hline
-    Mov Gadgets                 & 1071          & 82\%           \\
+    \textbf{Total Gadgets}      & \textbf{13153} & \textbf{100\%} \\ \hline
+    Mov Gadgets                 & 961           & 7\%           \\
     \textbf{Total Instructions} & \textbf{2054} & \textbf{100\%} \\ \hline
-    Supported                   & 1071          & 82\%           \\ \hline
-    Supported (w/o offsets)     & 1579          & 76\%           \\ \hline
-    Not supported               & 353           & 17\%          
+    Supported                   & 1925          & 93\%           \\ \hline
+    Supported (w/o offsets)     & 1803          & 87\%           \\ \hline
+    Not supported               & 129           & 7\%          
   \end{tabular}%
   \label{result-hanoi}
   \caption{Statistics on hanoi\_towers.c}
