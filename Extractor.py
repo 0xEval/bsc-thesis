@@ -80,6 +80,8 @@ def print_gadgets(gtype, glist):
     print("Found %i gadgets:\n" % len(glist))
     for g in glist:
         print("%s" % g)
+        for i in g.instructions:
+            print(i)
 
 
 def _test_class():

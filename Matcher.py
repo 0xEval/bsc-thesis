@@ -597,6 +597,11 @@ if __name__ == '__main__':
     reglist = ['eax', 'ebx', 'ecx', 'edx', 'ebp', 'esp', 'edi', 'esi']
     controlled_regs = []
 
+    if DEBUG:
+        for gtype, glist in gadgets_lists.items():
+            print("DEBUG: " + gtype)
+            print("-" * 80)
+            print_rule_validation(glist)
     for reg in pop_gadgets:
         if reg not in controlled_regs:
             controlled_regs.append(reg.instructions[0].dst)
@@ -618,11 +623,6 @@ if __name__ == '__main__':
     for g in pop_gadgets:
         print(g)
 
-    if DEBUG:
-        for gtype, glist in gadgets_lists.items():
-            print("DEBUG: " + gtype)
-            print("-" * 80)
-            print_rule_validation(glist)
 
     print("Register move gadgets: ")
     print("-" * 80)

@@ -175,7 +175,11 @@ all global variables and static variables that are initialized to zero or do
 not have explicit initialization in source code.
 
 \begin{lstlisting}[aboveskip=\bigskipamount,belowskip=\medskipamount,caption=Variable
+<<<<<<< HEAD
 location in memory,language=C,label=lst-variable]
+=======
+location in memory,language=C,label=lst-variable] 
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
 // this static variable is stored in the BSS segment
 static int bss_variable;
 // this global variable is in the DATA segment
@@ -388,7 +392,11 @@ positions of key data areas of a process, including the base of the executable
 and the positions of the stack, heap and libraries.
 
 \textit{ShadowStacks:} This technique mitigates return address overwrites by
+<<<<<<< HEAD
 keeping a record of the legitimate return address for a function call on a
+=======
+keeping a record of of the legitimate return address for a function call on a
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
 separate stack, and then to check that the return address is still correct
 before returning.
 
@@ -440,7 +448,11 @@ objects. Gadgets are defined by a list of \textit{Instruction} objects (see
 address of its first instruction. We define an Instruction by a label, an
 address, a mnemonic, a source and a destination (without optional offsets).
 Mnemonics are short strings representing the type of instruction. A mnemonic is
+<<<<<<< HEAD
 assigned by looking-up in a dictionary of opcodes (see Table 1). The opcode is extracted
+=======
+assigned by looking-up in a dictionary of opcodes (see \autoref{tab:opcode}). The opcode is extracted
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
 with regular expressions manipulations on Ropper's output.
 
 \begin{lstlisting}[float=h,aboveskip=\medskipamount,belowskip=0pt,caption=Example
@@ -483,7 +495,7 @@ lookup was successful, otherwise it's simply referred to as not supported.
 The Matcher module will create lists containing each type of gadget. We
 divide them in three categories: memory reads, memory writes, and register
 moves. The output of the Extractor module is analyzed using an expandable set
-of rules.
+of rules (see \autoref{lst:rule}).
 
 \textit{No access on \texttt{esp}}: we rule out any instruction accessing, in
 read or write, \texttt{esp}. Because of the nature of ROP, controlling
@@ -555,7 +567,11 @@ in order to fit a target instruction.
 \begin{algorithm}
     \caption{IsMovable(src, dst, register\_move[])}
     \label{alg:is_movable}
+<<<<<<< HEAD
     \begin{algorithmic}[1]
+=======
+    \begin{algorithmic}[1] 
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
         \REQUIRE $register\_move[]$ (gadgets moving regA to regB)
 
         \FOR{$register$ accessible from $src$}
@@ -587,7 +603,11 @@ in order to fit a target instruction.
     \end{algorithmic}
 \end{algorithm}
 
+<<<<<<< HEAD
 We ensure that no side-effects occur within the gadget chain (see Algorithm
+=======
+We ensure that no side-effects occur within the gadget chain (see Algorithm 
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
 \autoref{alg:search_for_conflict}). In other words,
 we check if any intermediary instruction inside the gadget chain affects
 negatively a value modified beforehand. If so, the gadget is discarded.
@@ -741,7 +761,11 @@ day, no ROP compilers were integrated into LLVM.
     \textbf{Total Instructions} & \textbf{1270} & \textbf{100\%} \\ \hline
     Supported                   & 1178          & 92\%           \\ \hline
     Supported (w/o offsets)     & 1098          & 85\%           \\ \hline
+<<<<<<< HEAD
     Not supported               & 92            &  7\%
+=======
+    Not supported               & 92            &  7\%          
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
   \end{tabular}%
   \label{result-fibo}
   \caption{Statistics on fibonacci.c}
@@ -757,7 +781,11 @@ day, no ROP compilers were integrated into LLVM.
     \textbf{Total Instructions} & \textbf{2054} & \textbf{100\%} \\ \hline
     Supported                   & 1925          & 93\%           \\ \hline
     Supported (w/o offsets)     & 1803          & 87\%           \\ \hline
+<<<<<<< HEAD
     Not supported               & 129           & 7\%
+=======
+    Not supported               & 129           & 7\%          
+>>>>>>> 8a1659c9aaa397ac58835e3eac58f9366fd16834
   \end{tabular}%
   \label{result-hanoi}
   \caption{Statistics on hanoi\_towers.c}
